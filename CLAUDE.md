@@ -51,6 +51,13 @@ dotnet test Alina.slnx
 dotnet run --project src/Alina.Console
 ```
 
+## Commits
+
+- **Não adicione trailer de co-autoria** (`Co-Authored-By: Claude ...`) nem qualquer
+  outra menção ao assistente nas mensagens de commit. Os commits ficam apenas na
+  autoria do usuário, para não registrar colaborador extra no repositório.
+- Mensagens de commit em português.
+
 ## Convenções
 
 - Ferramentas expostas ao LLM herdam de `ToolBase`/`ITool`; operações críticas passam por
