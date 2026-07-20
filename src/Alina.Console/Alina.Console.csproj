@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Alina.Core\Alina.Core.csproj" />
+    <ProjectReference Include="..\Alina.Tools\Alina.Tools.csproj" />
+    <ProjectReference Include="..\Alina.Infrastructure\Alina.Infrastructure.csproj" />
+    <ProjectReference Include="..\Alina.Voice\Alina.Voice.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>alina-console</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="plugins\**\*.plugin.json" CopyToOutputDirectory="PreserveNewest" LinkBase="plugins" />
+  </ItemGroup>
+
+</Project>

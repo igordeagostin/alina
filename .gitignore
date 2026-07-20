@@ -1,0 +1,24 @@
+## .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## Segredos e dados locais (nunca commitar chaves de API)
+secrets.json
+appsettings.*.local.json
+data/
+
+## SO
+Thumbs.db
+.DS_Store
+
+## Artefato de cache do PowerShell criado no diretório
+Microsoft/

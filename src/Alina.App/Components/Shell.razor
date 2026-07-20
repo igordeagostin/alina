@@ -1,0 +1,83 @@
+@using Alina.Core.Orchestration
+@inject IServiceProvider Services
+
+<div class="shell">
+    <div class="shell__header">
+        <div class="orb"></div>
+        <div class="shell__title">Alina</div>
+        <div class="shell__status">@_status</div>
+    </div>
+
+    <div class="shell__log">
+        @foreach (var m in _messages)
+        {
+            <div class="msg msg--@m.Kind">@m.Text</div>
+        }
+        @if (_busy)
+        {
+            <div class="msg msg--bot msg--pending">pensando…</div>
+        }
+    </div>
+
+    <div class="shell__composer">
+        <input class="shell__input"
+               placeholder="Fale com a Alina…"
+               @bind="_input"
+               @bind:event="oninput"
+               @onkeydown="OnKeyDown"
+               disabled="@_busy" />
+        <button class="shell__send" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_input))">
+            Enviar
+        </button>
+    </div>
+</div>
+
+@code {
+    private readonly List<Message> _messages = new();
+    private string _input = string.Empty;
+    private bool _busy;
+    private string _status = "pronta";
+
+    private IOrchestrator? _orchestrator;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendAsync();
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        var text = _input.Trim();
+        if (text.Length == 0 || _busy)
+        {
+            return;
+        }
+
+        _input = string.Empty;
+        _messages.Add(new Message("user", text));
+        _busy = true;
+        _status = "pensando…";
+
+        try
+        {
+            // Resolução preguiçosa: só cria o IChatClient (e valida a chave) no primeiro uso.
+            _orchestrator ??= Services.GetRequiredService<IOrchestrator>();
+            var response = await _orchestrator.SendAsync(text);
+            _messages.Add(new Message("bot", string.IsNullOrWhiteSpace(response) ? "(sem resposta)" : response));
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new Message("error", $"[erro] {ex.Message}"));
+        }
+        finally
+        {
+            _busy = false;
+            _status = "pronta";
+        }
+    }
+
+    private sealed record Message(string Kind, string Text);
+}
