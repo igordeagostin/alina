@@ -1,15 +1,26 @@
 using System.Windows;
 using Alina.App.Components;
-using Microsoft.AspNetCore.Components.WebView;
+using Alina.App.Services;
 using Microsoft.AspNetCore.Components.WebView.Wpf;
 
 namespace Alina.App;
 
 public partial class MainWindow : Window
 {
+    private readonly ShellUiState _uiState;
+
+    private const double LarguraCompacta = 380;
+    private const double AlturaCompacta = 460;
+    private const double LarguraDetalhada = 460;
+    private const double AlturaDetalhada = 720;
+
     public MainWindow(IServiceProvider services)
     {
         InitializeComponent();
+
+        _uiState = (ShellUiState)services.GetService(typeof(ShellUiState))!;
+        _uiState.ModoAlterado += AoAlterarModo;
+        AplicarModo();
 
         Blazor.Services = services;
         Blazor.RootComponents.Add(new RootComponent
@@ -17,5 +28,27 @@ public partial class MainWindow : Window
             Selector = "#app",
             ComponentType = typeof(Shell),
         });
+    }
+
+    private void AoAlterarModo() => Dispatcher.Invoke(AplicarModo);
+
+    private void AplicarModo()
+    {
+        if (_uiState.Compacto)
+        {
+            Width = LarguraCompacta;
+            Height = AlturaCompacta;
+        }
+        else
+        {
+            Width = LarguraDetalhada;
+            Height = AlturaDetalhada;
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _uiState.ModoAlterado -= AoAlterarModo;
+        base.OnClosed(e);
     }
 }

@@ -1,11 +1,25 @@
+@using Alina.App.Services
 @using Alina.Core.Orchestration
+@using Alina.Voice
 @inject IServiceProvider Services
+@inject ShellUiState UiState
+@implements IDisposable
 
-<div class="shell">
+<div class="shell @(UiState.Compacto ? "shell--compacto" : "shell--detalhado") shell--@_estado.ToString().ToLowerInvariant()">
     <div class="shell__header">
-        <div class="orb"></div>
+        <div class="orb orb--mini"></div>
         <div class="shell__title">Alina</div>
-        <div class="shell__status">@_status</div>
+        <button class="modo-toggle" @onclick="AlternarModo" title="@(UiState.Compacto ? "Modo detalhado" : "Modo compacto")">
+            @(UiState.Compacto ? "Detalhes" : "Compactar")
+        </button>
+    </div>
+
+    <div class="voz">
+        <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@(_estado is Estado.Pensando or Estado.Falando)" title="@RotuloMicrofone">
+            <span class="orb__pulso"></span>
+        </button>
+        <div class="voz__estado">@TextoEstado</div>
+        <div class="voz__dica">@DicaEstado</div>
     </div>
 
     <div class="shell__log">
@@ -13,7 +27,7 @@
         {
             <div class="msg msg--@m.Kind">@m.Text</div>
         }
-        @if (_busy)
+        @if (_estado == Estado.Pensando)
         {
             <div class="msg msg--bot msg--pending">pensando…</div>
         }
@@ -21,62 +35,168 @@
 
     <div class="shell__composer">
         <input class="shell__input"
-               placeholder="Fale com a Alina…"
+               placeholder="Ou digite aqui…"
                @bind="_input"
                @bind:event="oninput"
                @onkeydown="OnKeyDown"
-               disabled="@_busy" />
-        <button class="shell__send" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_input))">
+               disabled="@Ocupado" />
+        <button class="shell__send" @onclick="EnviarTextoAsync" disabled="@(Ocupado || string.IsNullOrWhiteSpace(_input))">
             Enviar
         </button>
     </div>
 </div>
 
 @code {
+    private enum Estado { Parada, Ouvindo, Pensando, Falando }
+
     private readonly List<Message> _messages = new();
     private string _input = string.Empty;
-    private bool _busy;
-    private string _status = "pronta";
+    private Estado _estado = Estado.Parada;
 
     private IOrchestrator? _orchestrator;
+    private IAudioRecorder? _recorder;
+    private ISpeechToText? _stt;
+    private ITextToSpeech? _tts;
+    private IAudioPlayer? _player;
+
+    private TaskCompletionSource? _pararGravacao;
+
+    private bool Ocupado => _estado is Estado.Pensando or Estado.Falando;
+
+    private string RotuloMicrofone => _estado switch
+    {
+        Estado.Ouvindo => "Parar de gravar",
+        Estado.Pensando => "Processando…",
+        Estado.Falando => "Falando…",
+        _ => "Falar com a Alina",
+    };
+
+    private string TextoEstado => _estado switch
+    {
+        Estado.Ouvindo => "ouvindo…",
+        Estado.Pensando => "pensando…",
+        Estado.Falando => "falando…",
+        _ => "toque para falar",
+    };
+
+    private string DicaEstado => _estado switch
+    {
+        Estado.Ouvindo => "toque de novo para enviar",
+        _ => "modo voz — o padrão da Alina",
+    };
+
+    protected override void OnInitialized() => UiState.ModoAlterado += AoAlterarModo;
+
+    public void Dispose() => UiState.ModoAlterado -= AoAlterarModo;
+
+    private void AoAlterarModo() => InvokeAsync(StateHasChanged);
+
+    private void AlternarModo() => UiState.Alternar();
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !e.ShiftKey)
         {
-            await SendAsync();
+            await EnviarTextoAsync();
         }
     }
 
-    private async Task SendAsync()
+    private async Task AlternarEscutaAsync()
     {
-        var text = _input.Trim();
-        if (text.Length == 0 || _busy)
+        if (_estado == Estado.Ouvindo)
+        {
+            _pararGravacao?.TrySetResult();
+            return;
+        }
+
+        if (_estado != Estado.Parada)
+        {
+            return;
+        }
+
+        try
+        {
+            _recorder ??= Services.GetRequiredService<IAudioRecorder>();
+            _stt ??= Services.GetRequiredService<ISpeechToText>();
+
+            _estado = Estado.Ouvindo;
+            _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var wav = await _recorder.RecordAsync(_ => _pararGravacao.Task);
+            _estado = Estado.Pensando;
+            StateHasChanged();
+
+            var texto = await _stt.TranscribeAsync(wav);
+            if (string.IsNullOrWhiteSpace(texto))
+            {
+                _messages.Add(new Message("error", "(não entendi nada, tente de novo)"));
+                _estado = Estado.Parada;
+                return;
+            }
+
+            _messages.Add(new Message("user", texto));
+            await ResponderAsync(texto, comVoz: true);
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new Message("error", $"[erro no modo voz] {ex.Message}"));
+            _estado = Estado.Parada;
+        }
+    }
+
+    private async Task EnviarTextoAsync()
+    {
+        var texto = _input.Trim();
+        if (texto.Length == 0 || Ocupado)
         {
             return;
         }
 
         _input = string.Empty;
-        _messages.Add(new Message("user", text));
-        _busy = true;
-        _status = "pensando…";
+        _messages.Add(new Message("user", texto));
+        await ResponderAsync(texto, comVoz: false);
+    }
 
+    private async Task ResponderAsync(string texto, bool comVoz)
+    {
+        _estado = Estado.Pensando;
+        StateHasChanged();
+
+        string resposta;
         try
         {
-            // Resolução preguiçosa: só cria o IChatClient (e valida a chave) no primeiro uso.
             _orchestrator ??= Services.GetRequiredService<IOrchestrator>();
-            var response = await _orchestrator.SendAsync(text);
-            _messages.Add(new Message("bot", string.IsNullOrWhiteSpace(response) ? "(sem resposta)" : response));
+            resposta = await _orchestrator.SendAsync(texto);
+            resposta = string.IsNullOrWhiteSpace(resposta) ? "(sem resposta)" : resposta;
+            _messages.Add(new Message("bot", resposta));
         }
         catch (Exception ex)
         {
             _messages.Add(new Message("error", $"[erro] {ex.Message}"));
+            _estado = Estado.Parada;
+            return;
         }
-        finally
+
+        if (comVoz)
         {
-            _busy = false;
-            _status = "pronta";
+            try
+            {
+                _estado = Estado.Falando;
+                StateHasChanged();
+
+                _tts ??= Services.GetRequiredService<ITextToSpeech>();
+                _player ??= Services.GetRequiredService<IAudioPlayer>();
+
+                var mp3 = await _tts.SynthesizeAsync(resposta);
+                await _player.PlayMp3Async(mp3);
+            }
+            catch (Exception ex)
+            {
+                _messages.Add(new Message("error", $"[erro na fala] {ex.Message}"));
+            }
         }
+
+        _estado = Estado.Parada;
     }
 
     private sealed record Message(string Kind, string Text);

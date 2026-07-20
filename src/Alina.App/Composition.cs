@@ -49,6 +49,9 @@ public static class Composition
         var confirmation = new GuiConfirmationService();
         builder.Services.AddSingleton<IConfirmationService>(confirmation);
 
+        // Estado de UI compartilhado (modo compacto/detalhado)
+        builder.Services.AddSingleton<ShellUiState>();
+
         // Tools básicas
         builder.Services.AddSingleton<ITool, TerminalTool>();
         builder.Services.AddSingleton<ITool, FileReadTool>();
