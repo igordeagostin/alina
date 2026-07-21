@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:blazor="clr-namespace:Microsoft.AspNetCore.Components.WebView.Wpf;assembly=Microsoft.AspNetCore.Components.WebView.Wpf"
-        Title="Alina" Height="460" Width="380"
-        MinHeight="380" MinWidth="340"
+        Title="Alina" Height="720" Width="420"
+        MinHeight="480" MinWidth="360"
         WindowStartupLocation="CenterScreen"
         Icon="pack://application:,,,/Assets/alina.ico"
         Background="#171717">
