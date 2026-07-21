@@ -3,6 +3,7 @@ using Alina.Core.Orchestration;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
 using Alina.Infrastructure.DependencyInjection;
+using Alina.Mcp;
 using Alina.Tools;
 using Alina.Tools.Background;
 using Alina.Tools.ClaudeCode;
@@ -71,6 +72,11 @@ public static class Composition
         // Tools básicas
         builder.Services.AddSingleton<ITool, TerminalTool>();
         builder.Services.AddSingleton<ITool, FileReadTool>();
+
+        // Servidor de permissão (Opção A): pedidos de permissão do Claude Code em modo headless
+        // aparecem como confirmação na UI (overlay), em vez de serem bloqueados silenciosamente.
+        builder.Services.AddSingleton<IServidorPermissao>(sp =>
+            new ServidorPermissaoMcp(sp.GetRequiredService<IConfirmationService>()));
 
         // Claude Code (Fase 3)
         var claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();

@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Alina.Tools\Alina.Tools.csproj" />
     <ProjectReference Include="..\..\src\Alina.Infrastructure\Alina.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Alina.Voice\Alina.Voice.csproj" />
+    <ProjectReference Include="..\..\src\Alina.Mcp\Alina.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5,6 +5,7 @@
     <ProjectReference Include="..\Alina.Tools\Alina.Tools.csproj" />
     <ProjectReference Include="..\Alina.Infrastructure\Alina.Infrastructure.csproj" />
     <ProjectReference Include="..\Alina.Voice\Alina.Voice.csproj" />
+    <ProjectReference Include="..\Alina.Mcp\Alina.Mcp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

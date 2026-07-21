@@ -110,4 +110,74 @@ public sealed class ClaudeCodeToolTests
         Assert.True(tool.RequiresConfirmation);
         Assert.Equal("delegar_claude_code", tool.Name);
     }
+
+    // Amostra de linhas de `claude -p --output-format stream-json --verbose`.
+    private static readonly string[] StreamLinhas =
+    [
+        "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"abc\",\"model\":\"claude\"}",
+        "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Vou criar o arquivo.\"}]}}",
+        "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Write\",\"input\":{\"file_path\":\"login.cs\"}}]}}",
+        "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"content\":\"File created\"}]}}",
+        "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Criei o arquivo login.cs\"," +
+            "\"num_turns\":3,\"duration_ms\":4200,\"total_cost_usd\":0.0123,\"permission_denials\":[]}",
+    ];
+
+    [Fact]
+    public void InterpretarStreaming_emite_eventos_na_ordem_e_resume_resultado()
+    {
+        var eventos = new List<EventoProgressoClaudeCode>();
+
+        var resumo = ClaudeCodeTool.InterpretarStreaming(StreamLinhas, stderr: "", exitCode: 0, eventos.Add);
+
+        Assert.Collection(eventos,
+            e => Assert.Equal(TipoEventoClaudeCode.Inicio, e.Tipo),
+            e =>
+            {
+                Assert.Equal(TipoEventoClaudeCode.Texto, e.Tipo);
+                Assert.Contains("criar o arquivo", e.Texto, StringComparison.OrdinalIgnoreCase);
+            },
+            e =>
+            {
+                Assert.Equal(TipoEventoClaudeCode.Ferramenta, e.Tipo);
+                Assert.Contains("Write", e.Texto);
+                Assert.Contains("login.cs", e.Texto);
+            },
+            e => Assert.Equal(TipoEventoClaudeCode.ResultadoFerramenta, e.Tipo),
+            e => Assert.Equal(TipoEventoClaudeCode.Fim, e.Tipo));
+
+        Assert.Contains("Criei o arquivo login.cs", resumo);
+        Assert.Contains("3 turno(s)", resumo);
+        Assert.Contains("$0.0123", resumo);
+    }
+
+    [Fact]
+    public void InterpretarStreaming_sinaliza_erro_e_permission_denials()
+    {
+        string[] linhas =
+        [
+            "{\"type\":\"result\",\"subtype\":\"error_max_turns\",\"is_error\":true,\"result\":\"parcial\"," +
+                "\"permission_denials\":[{\"tool\":\"Bash\"},{\"tool\":\"Edit\"}]}",
+        ];
+
+        var resumo = ClaudeCodeTool.InterpretarStreaming(linhas, stderr: "", exitCode: 1, onEvento: null);
+
+        Assert.Contains("erro", resumo, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("2 ação", resumo);
+        Assert.Contains("bloqueada", resumo, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void InterpretarStreaming_ignora_linhas_invalidas()
+    {
+        string[] linhas =
+        [
+            "não é json",
+            "",
+            "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"ok\"}",
+        ];
+
+        var resumo = ClaudeCodeTool.InterpretarStreaming(linhas, stderr: "", exitCode: 0, onEvento: null);
+
+        Assert.Contains("ok", resumo);
+    }
 }

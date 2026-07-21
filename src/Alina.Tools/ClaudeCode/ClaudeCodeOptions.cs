@@ -23,6 +23,21 @@ public sealed class ClaudeCodeOptions
     /// </summary>
     public bool SkipPermissions { get; set; }
 
+    /// <summary>
+    /// Se <c>true</c>, cada permissão que o Claude Code precisar no meio da execução é
+    /// perguntada ao usuário via <c>--permission-prompt-tool</c> (servidor MCP da Alina),
+    /// em vez de aceitar/bloquear automaticamente. Exige um <see cref="IServidorPermissao"/>
+    /// registrado. Ignora <see cref="PermissionMode"/>/<see cref="SkipPermissions"/> quando ativo.
+    /// </summary>
+    public bool PermissaoInterativa { get; set; }
+
+    /// <summary>
+    /// Se <c>true</c> (padrão), executa em modo streaming (<c>--output-format stream-json</c>),
+    /// emitindo progresso ao vivo via <see cref="ClaudeCodeTool.Progresso"/>. Se <c>false</c>,
+    /// usa o modo antigo (<c>--output-format json</c>), que só entrega o resultado no fim.
+    /// </summary>
+    public bool Streaming { get; set; } = true;
+
     /// <summary>Tempo máximo de execução em segundos (tarefas de código podem demorar).</summary>
     public int TimeoutSeconds { get; set; } = 600;
 

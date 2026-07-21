@@ -4,6 +4,7 @@ using Alina.Core.Orchestration;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
 using Alina.Infrastructure.DependencyInjection;
+using Alina.Mcp;
 using Alina.Tools;
 using Alina.Tools.Background;
 using Alina.Tools.ClaudeCode;
@@ -31,11 +32,17 @@ builder.Logging.SetMinimumLevel(LogLevel.Warning);
 // Núcleo (LLM, memória, orquestrador)
 builder.Services.AddAlina(builder.Configuration);
 
-// Composição da UI: confirmação e tools concretas
-var confirmation = new ConsoleConfirmationService();
+// Composição da UI: confirmação roteada (voz no modo voz, console no modo texto) e tools
+var confirmation = new ConfirmacaoRoteada(new ConsoleConfirmationService());
+builder.Services.AddSingleton(confirmation);
 builder.Services.AddSingleton<IConfirmationService>(confirmation);
 builder.Services.AddSingleton<ITool, TerminalTool>();
 builder.Services.AddSingleton<ITool, FileReadTool>();
+
+// Servidor de permissão (Opção A): atende os pedidos do Claude Code em modo headless,
+// perguntando ao usuário (voz/console) em vez de bloquear silenciosamente.
+builder.Services.AddSingleton<IServidorPermissao>(sp =>
+    new ServidorPermissaoMcp(sp.GetRequiredService<IConfirmationService>()));
 
 // Tool do Claude Code (Fase 3) — registrada como concreta e como ITool (mesma instância)
 var claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();
@@ -112,6 +119,10 @@ if (pluginResult.Tools.Count > 0 || pluginResult.Warnings.Count > 0)
 var store = host.Services.GetRequiredService<IConversationStore>();
 var memory = host.Services.GetRequiredService<IMemoryStore>();
 var tasks = host.Services.GetRequiredService<IBackgroundTaskManager>();
+
+// Progresso ao vivo do Claude Code (streaming): mostra o que ele está fazendo no console.
+var claudeCode = host.Services.GetRequiredService<ClaudeCodeTool>();
+claudeCode.Progresso += EscreverProgressoClaudeCode;
 
 // Notifica no console quando uma tarefa em background termina.
 tasks.TaskFinished += (_, task) =>
@@ -374,6 +385,29 @@ static void PrintBanner()
 static void PrintHelp()
 {
     WriteLineColored("Comandos: /voz  /lembrar  /memorias  /plugins  /tarefas  /nova  /historico  /ajuda  /sair", ConsoleColor.DarkGray);
+}
+
+static void EscreverProgressoClaudeCode(EventoProgressoClaudeCode e)
+{
+    switch (e.Tipo)
+    {
+        case TipoEventoClaudeCode.Inicio:
+            WriteLineColored($"\n  ⟳ {e.Texto}", ConsoleColor.DarkGray);
+            break;
+        case TipoEventoClaudeCode.Texto:
+            WriteLineColored($"  » {e.Texto}", ConsoleColor.DarkGray);
+            break;
+        case TipoEventoClaudeCode.Ferramenta:
+            WriteLineColored($"  ⚙ {e.Texto}", ConsoleColor.DarkCyan);
+            break;
+        case TipoEventoClaudeCode.ResultadoFerramenta:
+            WriteLineColored($"  ← {e.Texto}", ConsoleColor.DarkGray);
+            break;
+        case TipoEventoClaudeCode.Fim:
+            // O resultado final também é retornado pela tool; aqui só marcamos a conclusão.
+            WriteLineColored("  ✓ Claude Code concluiu.", ConsoleColor.DarkGreen);
+            break;
+    }
 }
 
 static void WriteColored(string text, ConsoleColor color)

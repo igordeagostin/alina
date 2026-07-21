@@ -4,6 +4,7 @@
     <Project Path="src/Alina.Console/Alina.Console.csproj" />
     <Project Path="src/Alina.Core/Alina.Core.csproj" />
     <Project Path="src/Alina.Infrastructure/Alina.Infrastructure.csproj" />
+    <Project Path="src/Alina.Mcp/Alina.Mcp.csproj" />
     <Project Path="src/Alina.Tools/Alina.Tools.csproj" />
     <Project Path="src/Alina.Voice/Alina.Voice.csproj" />
   </Folder>

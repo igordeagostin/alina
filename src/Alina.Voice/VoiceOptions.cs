@@ -37,4 +37,20 @@ public sealed class VoiceOptions
     /// diferenciar maiúsculas. Inclua variações fonéticas para reduzir falhas de detecção.
     /// </summary>
     public string[] PalavrasAtivacao { get; set; } = ["alina"];
+
+    /// <summary>Duração (segundos) da janela de captura da resposta numa confirmação por voz.</summary>
+    public int SegundosRespostaConfirmacao { get; set; } = 6;
+
+    /// <summary>Quantas vezes repetir a pergunta quando a resposta não é compreendida.</summary>
+    public int TentativasConfirmacaoVoz { get; set; } = 2;
+
+    /// <summary>Termos interpretados como "sim" numa confirmação por voz (sem acento/maiúsculas).</summary>
+    public string[] PalavrasSim { get; set; } =
+        ["sim", "pode", "prossiga", "prossegue", "confirmo", "confirmado", "confirmar",
+         "autorizo", "autorizado", "claro", "positivo", "ok", "okei", "vai", "manda", "beleza", "isso"];
+
+    /// <summary>Termos interpretados como "não" numa confirmação por voz (sem acento/maiúsculas).</summary>
+    public string[] PalavrasNao { get; set; } =
+        ["nao", "negativo", "cancela", "cancelar", "cancelado", "para", "pare", "pode nao",
+         "melhor nao", "nunca", "recuso", "negado"];
 }
