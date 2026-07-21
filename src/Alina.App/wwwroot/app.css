@@ -1,24 +1,24 @@
 :root {
     color-scheme: dark;
 
-    /* Paleta derivada da cor principal #1dbf73 */
-    --accent: #1dbf73;
-    --accent-strong: #17a262;
-    --accent-soft: #35d98a;
-    --accent-bright: #5cf0a6;
-    --accent-glow: rgba(29, 191, 115, 0.55);
-    --accent-glow-soft: rgba(29, 191, 115, 0.28);
+    /* Identidade visual da Alina — Âmbar (ver docs/identidade-visual.md) */
+    --accent: #dfa53a;
+    --accent-strong: #c48f2e;
+    --accent-soft: #e8b84a;
+    --accent-bright: #f2c965;
+    --accent-glow: rgba(223, 165, 58, 0.55);
+    --accent-glow-soft: rgba(223, 165, 58, 0.26);
 
-    /* Neutros com leve matiz verde, partindo da cor principal */
-    --bg: #08120d;
-    --panel: #0e1f16;
-    --panel-2: #0b1811;
-    --border: #143324;
-    --border-soft: #102a1e;
+    /* Neutros: preto grafite e cinza */
+    --bg: #171717;
+    --panel: #303030;
+    --panel-2: #1f1f1f;
+    --border: #3a3a3a;
+    --border-soft: #2a2a2a;
 
-    --text: #e8f7ef;
-    --muted: #7ba793;
-    --user: #143528;
+    --text: #f7f7f2;
+    --muted: #9a9a92;
+    --user: #2a2620;
 
     --error-bg: #3a1620;
     --error-text: #ffb3c0;
@@ -298,7 +298,7 @@ html, body {
     border: none;
     border-radius: 10px;
     background: var(--accent);
-    color: #04160d;
+    color: #171717;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.15s;
@@ -320,7 +320,7 @@ html, body {
     display: grid;
     place-items: center;
     padding: 20px;
-    background: rgba(4, 12, 8, 0.72);
+    background: rgba(23, 23, 23, 0.72);
     backdrop-filter: blur(3px);
     z-index: 900;
 }
@@ -379,7 +379,7 @@ html, body {
 .confirm__sim {
     border: none;
     background: var(--accent);
-    color: #04160d;
+    color: #171717;
 }
 
 .confirm__sim:hover {
