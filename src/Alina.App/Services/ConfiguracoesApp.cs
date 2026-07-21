@@ -21,4 +21,13 @@ public sealed class ConfiguracoesApp
 
     /// <summary>Velocidade da fala (1.0 = normal).</summary>
     public double VelocidadeFala { get; set; } = 1.0;
+
+    /// <summary>Silêncio (segundos) que encerra a gravação por voz automaticamente.</summary>
+    public double SegundosSilencioParaEncerrar { get; set; } = 1.5;
+
+    /// <summary>Manter a conversa fluída: voltar a ouvir sozinha após responder.</summary>
+    public bool ConversaContinua { get; set; } = true;
+
+    /// <summary>Tempo (segundos) que a Alina segue ouvindo antes de dormir na conversa contínua.</summary>
+    public double SegundosJanelaConversa { get; set; } = 10;
 }

@@ -12,8 +12,8 @@ public partial class MainWindow : Window
 
     private const double LarguraCompacta = 380;
     private const double AlturaCompacta = 460;
-    private const double LarguraDetalhada = 460;
-    private const double AlturaDetalhada = 720;
+    private const double LarguraDetalhada = 560;
+    private const double AlturaDetalhada = 860;
 
     public MainWindow(IServiceProvider services)
     {

@@ -5,11 +5,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Alina.App.Services;
 
 /// <summary>
-/// Orquestra um turno completo de interação (voz ou texto) reaproveitando os
-/// componentes de <c>Alina.Voice</c> e o <see cref="IOrchestrator"/>. É a fonte
-/// única do fluxo, acionada tanto pelo clique no orbe quanto pela hotkey global.
-/// Push-to-talk por toque: <see cref="AlternarEscutaAsync"/> inicia a gravação e,
-/// chamada de novo, a encerra e processa.
+/// Orquestra a interação por voz (ou texto) reaproveitando os componentes de
+/// <c>Alina.Voice</c> e o <see cref="IOrchestrator"/>. É a fonte única do fluxo,
+/// acionada pelo clique no orbe, pela hotkey global ou pela palavra de ativação.
+/// Em conversa contínua, <see cref="AlternarEscutaAsync"/> inicia um ciclo de
+/// turnos: a cada resposta, a Alina volta a ouvir sozinha e só "dorme" quando você
+/// fica em silêncio pela janela configurada. Chamada durante a escuta, encerra o
+/// turno atual e manda processar na hora.
 /// </summary>
 public sealed class VoiceController
 {
@@ -53,39 +55,75 @@ public sealed class VoiceController
             return;
         }
 
+        await ConversarAsync();
+    }
+
+    private async Task ConversarAsync()
+    {
+        var opcoes = _services.GetRequiredService<VoiceOptions>();
+        _recorder ??= _services.GetRequiredService<IAudioRecorder>();
+        _stt ??= _services.GetRequiredService<ISpeechToText>();
+
+        EscutaComecou?.Invoke();
+        var houveInteracao = false;
+
         try
         {
-            _recorder ??= _services.GetRequiredService<IAudioRecorder>();
-            _stt ??= _services.GetRequiredService<ISpeechToText>();
-
-            _status.Set(AssistantState.Listening);
-            EscutaComecou?.Invoke();
-            _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            var nivel = new ProgressoSincrono(v => NivelAudio?.Invoke(v));
-            var wav = await _recorder.RecordAsync(_ => _pararGravacao.Task, nivel);
-
-            _status.Set(AssistantState.Thinking);
-            var texto = await _stt.TranscribeAsync(wav);
-            if (string.IsNullOrWhiteSpace(texto))
+            while (true)
             {
-                _log.Adicionar("error", "(não entendi nada, tente de novo)");
-                _status.Set(AssistantState.Idle);
-                return;
-            }
+                var texto = await CapturarFalaAsync(opcoes);
+                if (string.IsNullOrWhiteSpace(texto))
+                {
+                    if (!houveInteracao)
+                    {
+                        _log.Adicionar("error", "(não entendi nada, tente de novo)");
+                    }
 
-            _log.Adicionar("user", texto);
-            await ResponderAsync(texto, comVoz: true);
+                    break;
+                }
+
+                _log.Adicionar("user", texto);
+                await ResponderAsync(texto, comVoz: true);
+                houveInteracao = true;
+
+                if (!opcoes.ConversaContinua)
+                {
+                    break;
+                }
+            }
         }
         catch (Exception ex)
         {
             _log.Adicionar("error", $"[erro no modo voz] {ex.Message}");
-            _status.Set(AssistantState.Idle);
         }
         finally
         {
+            _status.Set(AssistantState.Idle);
             Concluido?.Invoke();
         }
+    }
+
+    private async Task<string> CapturarFalaAsync(VoiceOptions opcoes)
+    {
+        _status.Set(AssistantState.Listening);
+        _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var silencio = new DetectorSilencio(
+            TimeSpan.FromSeconds(opcoes.SegundosSilencioParaEncerrar),
+            TimeSpan.FromSeconds(opcoes.SegundosJanelaConversa));
+        var nivel = new ProgressoSincrono(v =>
+        {
+            NivelAudio?.Invoke(v);
+            if (silencio.Alimentar(v))
+            {
+                _pararGravacao?.TrySetResult();
+            }
+        });
+
+        var wav = await _recorder!.RecordAsync(_ => _pararGravacao.Task, nivel);
+
+        _status.Set(AssistantState.Thinking);
+        return await _stt!.TranscribeAsync(wav);
     }
 
     public async Task EnviarTextoAsync(string texto)

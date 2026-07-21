@@ -34,9 +34,30 @@ public sealed class VoiceOptions
 
     /// <summary>
     /// Palavras/variações que acionam a assistente ao serem ditas. Comparação sem
-    /// diferenciar maiúsculas. Inclua variações fonéticas para reduzir falhas de detecção.
+    /// diferenciar maiúsculas. Como o Vosk (modelo pequeno) raramente transcreve o
+    /// nome próprio "alina" de forma exata, incluímos as variações fonéticas que ele
+    /// costuma produzir. Também alimentam a gramática restrita do reconhecedor.
     /// </summary>
-    public string[] PalavrasAtivacao { get; set; } = ["alina"];
+    public string[] PalavrasAtivacao { get; set; } = ["alina", "aline", "malina", "adelina", "elina"];
+
+    /// <summary>
+    /// Silêncio (em segundos) que encerra automaticamente a gravação depois que o
+    /// usuário falou, mandando processar sem precisar de clique. Valor menor ou
+    /// igual a zero desliga o corte automático (encerra só pelo orbe/hotkey).
+    /// </summary>
+    public double SegundosSilencioParaEncerrar { get; set; } = 1.5;
+
+    /// <summary>
+    /// Conversa contínua: depois de responder, a Alina volta a ouvir sozinha, sem
+    /// exigir que se diga "Alina" de novo a cada frase (como o modo voz do ChatGPT).
+    /// </summary>
+    public bool ConversaContinua { get; set; } = true;
+
+    /// <summary>
+    /// Quanto tempo (segundos) a Alina continua ouvindo, aguardando você voltar a
+    /// falar, antes de "dormir" e voltar a exigir a palavra de ativação.
+    /// </summary>
+    public double SegundosJanelaConversa { get; set; } = 10;
 
     /// <summary>Duração (segundos) da janela de captura da resposta numa confirmação por voz.</summary>
     public int SegundosRespostaConfirmacao { get; set; } = 6;

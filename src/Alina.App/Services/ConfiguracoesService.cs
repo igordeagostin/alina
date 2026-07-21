@@ -97,5 +97,8 @@ public sealed class ConfiguracoesService
         _voz.Voice = Atual.Voz;
         _voz.Speed = (float)Atual.VelocidadeFala;
         _voz.Enabled = Atual.FalarRespostas;
+        _voz.SegundosSilencioParaEncerrar = Atual.SegundosSilencioParaEncerrar;
+        _voz.ConversaContinua = Atual.ConversaContinua;
+        _voz.SegundosJanelaConversa = Atual.SegundosJanelaConversa;
     }
 }

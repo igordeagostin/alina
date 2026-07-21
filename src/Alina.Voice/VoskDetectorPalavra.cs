@@ -83,7 +83,7 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
 
     private void ComecarCaptura()
     {
-        _reconhecedor = new VoskRecognizer(_modelo, TaxaAmostragem);
+        _reconhecedor = new VoskRecognizer(_modelo, TaxaAmostragem, MontarGramatica());
         _microfone = new WaveInEvent { WaveFormat = new WaveFormat(TaxaAmostragem, 16, 1), BufferMilliseconds = 100 };
         _microfone.DataAvailable += AoReceberAudio;
 
@@ -139,6 +139,17 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
         using var doc = JsonDocument.Parse(json);
         var campo = completo ? "text" : "partial";
         return doc.RootElement.TryGetProperty(campo, out var valor) ? valor.GetString() ?? string.Empty : string.Empty;
+    }
+
+    private string MontarGramatica()
+    {
+        var frases = _opcoes.PalavrasAtivacao
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim().ToLowerInvariant())
+            .Distinct()
+            .Append("[unk]");
+
+        return JsonSerializer.Serialize(frases);
     }
 
     private bool ContemPalavra(string texto)
