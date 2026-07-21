@@ -2,7 +2,10 @@
 @using Alina.App.Services
 @using Alina.Core.Orchestration
 @using Alina.Core.Permissoes
+@using Alina.Infrastructure.Llm
 @using Microsoft.JSInterop
+@inject ConfiguracoesLlmService ConfigLlm
+@inject ReconfigurableChatClient Reconfig
 @inject ShellUiState UiState
 @inject IAssistantStatus Status
 @inject VoiceController Voz
@@ -71,6 +74,8 @@
             <div class="cfg__abas">
                 <button class="cfg__aba @(_aba == AbaConfig.Geral ? "cfg__aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Geral">Geral</button>
+                <button class="cfg__aba @(_aba == AbaConfig.IA ? "cfg__aba--ativa" : "")"
+                        @onclick="() => _aba = AbaConfig.IA">IA</button>
                 <button class="cfg__aba @(_aba == AbaConfig.Voz ? "cfg__aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Voz">Voz</button>
                 <button class="cfg__aba @(_aba == AbaConfig.Permissoes ? "cfg__aba--ativa" : "")"
@@ -95,6 +100,31 @@
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.AbrirEmModoCompacto" />
                         </label>
+                    </div>
+                }
+
+                @if (_aba == AbaConfig.IA)
+                {
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row--empilhado">
+                            <span class="cfg-row__titulo">Modelo do cérebro</span>
+                            <select class="cfg-campo" @bind="_modeloLlm">
+                                @foreach (var m in ConfigLlm.ModelosDisponiveis)
+                                {
+                                    <option value="@m.Id">@m.Rotulo — @m.Custo</option>
+                                }
+                            </select>
+                            <span class="cfg-row__sub">Modelos mais avançados conversam melhor, porém custam mais por uso. O trabalho pesado de código continua indo para o Claude Code (sua assinatura).</span>
+                        </div>
+                    </div>
+
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row--empilhado">
+                            <span class="cfg-row__titulo">Chave da API OpenAI</span>
+                            <input type="password" class="cfg-campo" @bind="_chaveLlm"
+                                   placeholder="@(ConfigLlm.ChaveDefinida ? "•••••••• (definida — deixe em branco para manter)" : "sk-…")" />
+                            <span class="cfg-row__sub">Guardada só neste computador, criptografada para o seu usuário do Windows — nunca é versionada nem enviada a lugar nenhum. Usada pelo cérebro (OpenAI) e pela voz.</span>
+                        </div>
                     </div>
                 }
 
@@ -131,12 +161,18 @@
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
                             <span class="cfg-row__titulo">Voz da Alina</span>
-                            <select class="cfg-campo" @bind="_edicao.Voz">
-                                @foreach (var v in Config.VozesDisponiveis)
-                                {
-                                    <option value="@v">@v</option>
-                                }
-                            </select>
+                            <div class="cfg-voz">
+                                <select class="cfg-campo" @bind="_edicao.Voz">
+                                    @foreach (var v in Config.VozesDisponiveis)
+                                    {
+                                        <option value="@v">@v</option>
+                                    }
+                                </select>
+                                <button class="cfg-voz__ouvir" @onclick="OuvirVozAsync" disabled="@Ocupado"
+                                        title="Ouvir uma amostra desta voz">
+                                    @(Status.Current == AssistantState.Speaking ? "♪ Tocando…" : "▶ Ouvir")
+                                </button>
+                            </div>
                         </div>
                         <div class="cfg-row cfg-row--empilhado">
                             <div class="cfg-row__cabecalho">
@@ -293,12 +329,14 @@
     private PedidoPermissaoUi? _permissaoPendente;
     private bool _jsPronto;
 
-    private enum AbaConfig { Geral, Voz, Permissoes }
+    private enum AbaConfig { Geral, IA, Voz, Permissoes }
 
     private bool _configAberta;
     private AbaConfig _aba = AbaConfig.Geral;
     private ConfiguracoesApp _edicao = new();
     private bool _iniciarComWindows;
+    private string _modeloLlm = string.Empty;
+    private string _chaveLlm = string.Empty;
     private PoliticaPermissaoOptions _permOpcoes = new();
     private string _novoDiretorio = string.Empty;
 
@@ -457,6 +495,8 @@
             SegundosJanelaConversa = Config.Atual.SegundosJanelaConversa,
         };
         _iniciarComWindows = Config.IniciarComWindows;
+        _modeloLlm = ConfigLlm.ModeloAtual;
+        _chaveLlm = string.Empty;
         _permOpcoes = ClonarOpcoes(Politica.Opcoes);
         _novoDiretorio = string.Empty;
         _aba = AbaConfig.Geral;
@@ -499,10 +539,32 @@
         Config.IniciarComWindows = _iniciarComWindows;
         Config.Salvar(_edicao);
         Politica.AtualizarOpcoes(_permOpcoes);
+        SalvarLlm();
         _configAberta = false;
     }
 
+    private void SalvarLlm()
+    {
+        ConfigLlm.Salvar(_modeloLlm, _chaveLlm);
+
+        // Aplica modelo/chave ao cérebro em runtime. Sem chave não há o que reconfigurar;
+        // se a chave for inválida, mantém o cliente anterior (o erro aparece ao conversar).
+        if (ConfigLlm.ChaveDefinida)
+        {
+            try
+            {
+                Reconfig.Reconfigurar(ConfigLlm.MontarOpcoesEfetivas());
+            }
+            catch
+            {
+                // ignora: o cliente anterior segue válido
+            }
+        }
+    }
+
     private Task AlternarEscutaAsync() => Voz.AlternarEscutaAsync();
+
+    private Task OuvirVozAsync() => Voz.PrevisualizarVozAsync(_edicao.Voz, _edicao.VelocidadeFala);
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {

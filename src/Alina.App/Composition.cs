@@ -4,6 +4,7 @@ using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
 using Alina.Infrastructure.DependencyInjection;
+using Alina.Infrastructure.Llm;
 using Alina.Mcp;
 using Alina.Tools;
 using Alina.Tools.Background;
@@ -12,6 +13,7 @@ using Alina.Tools.Git;
 using Alina.Tools.Memory;
 using Alina.Tools.Plugins;
 using Alina.Voice;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -40,6 +42,23 @@ public static class Composition
 
         // Núcleo (LLM, memória, orquestrador)
         builder.Services.AddAlina(builder.Configuration);
+
+        // Preferências de LLM ajustáveis pela UI (modelo + chave da API, guardada
+        // criptografada e fora do repositório). Sobrepõem o appsettings/user-secrets,
+        // então a voz e o cérebro já usam esses valores no arranque.
+        builder.Services.AddSingleton(sp => new ConfiguracoesLlmService(
+            sp.GetRequiredService<IOptions<StorageOptions>>().Value,
+            sp.GetRequiredService<IConfiguration>()));
+        builder.Services.AddOptions<LlmOptions>()
+            .PostConfigure<ConfiguracoesLlmService>((opcoes, cfg) => cfg.AplicarEm(opcoes));
+
+        // Cliente de chat reconfigurável: permite trocar modelo/chave em runtime pela
+        // tela de configurações. Substitui o IChatClient registrado por AddAlina.
+        builder.Services.AddSingleton<ReconfigurableChatClient>(sp =>
+            new ReconfigurableChatClient(
+                sp.GetRequiredService<IOptions<LlmOptions>>().Value,
+                sp.GetRequiredService<ILoggerFactory>()));
+        builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ReconfigurableChatClient>());
 
         // Serviços do BlazorWebView (WPF)
         builder.Services.AddWpfBlazorWebView();

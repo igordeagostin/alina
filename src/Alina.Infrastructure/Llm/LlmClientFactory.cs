@@ -1,4 +1,5 @@
 using System.ClientModel;
+using Anthropic;
 using Alina.Infrastructure.Configuration;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,7 @@ namespace Alina.Infrastructure.Llm;
 /// <summary>
 /// Cria o <see cref="IChatClient"/> abstraído via Microsoft.Extensions.AI,
 /// com pipeline de invocação de funções e logging. O provider é escolhido por
-/// configuração (default OpenAI); Anthropic fica reservado para fase futura.
+/// configuração (OpenAI ou Anthropic/Claude).
 /// </summary>
 public static class LlmClientFactory
 {
@@ -25,8 +26,7 @@ public static class LlmClientFactory
         IChatClient inner = options.Provider switch
         {
             LlmProvider.OpenAI => CreateOpenAI(options),
-            LlmProvider.Anthropic => throw new NotSupportedException(
-                "Provider Anthropic ainda não implementado (fase futura). Use Provider=OpenAI."),
+            LlmProvider.Anthropic => CreateAnthropic(options),
             _ => throw new ArgumentOutOfRangeException(nameof(options), options.Provider, "Provider desconhecido."),
         };
 
@@ -35,6 +35,15 @@ public static class LlmClientFactory
             .UseFunctionInvocation(loggerFactory)
             .UseLogging(loggerFactory)
             .Build();
+    }
+
+    private static IChatClient CreateAnthropic(LlmOptions options)
+    {
+        var client = string.IsNullOrWhiteSpace(options.Endpoint)
+            ? new AnthropicClient { ApiKey = options.ApiKey! }
+            : new AnthropicClient { ApiKey = options.ApiKey!, BaseUrl = options.Endpoint! };
+
+        return client.AsIChatClient(options.Model);
     }
 
     /// <summary>

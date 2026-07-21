@@ -755,6 +755,38 @@ html, body {
     box-shadow: 0 0 0 2px var(--accent-glow-soft);
 }
 
+.cfg-voz {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.cfg-voz .cfg-campo {
+    flex: 1;
+}
+
+.cfg-voz__ouvir {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 9px 14px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--accent-soft);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.cfg-voz__ouvir:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.cfg-voz__ouvir:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
 .cfg-range {
     width: 100%;
     accent-color: var(--accent);

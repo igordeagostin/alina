@@ -19,6 +19,8 @@ public sealed class VoiceController
     private readonly IAssistantStatus _status;
     private readonly ConversationUiState _log;
 
+    private const string FrasePrevia = "Oi, eu sou a Alina. É assim que a minha voz vai soar.";
+
     private IOrchestrator? _orchestrator;
     private IAudioRecorder? _recorder;
     private ISpeechToText? _stt;
@@ -124,6 +126,46 @@ public sealed class VoiceController
 
         _status.Set(AssistantState.Thinking);
         return await _stt!.TranscribeAsync(wav);
+    }
+
+    /// <summary>
+    /// Reproduz uma frase curta com a <paramref name="voz"/> e a <paramref name="velocidade"/>
+    /// informadas, para o usuário conferir a voz antes de salvar. Sobrepõe temporariamente as
+    /// opções vivas e as restaura ao final. Só toca quando a Alina está ociosa.
+    /// </summary>
+    public async Task PrevisualizarVozAsync(string voz, double velocidade)
+    {
+        if (_status.Current != AssistantState.Idle || string.IsNullOrWhiteSpace(voz))
+        {
+            return;
+        }
+
+        var opcoes = _services.GetRequiredService<VoiceOptions>();
+        var vozAnterior = opcoes.Voice;
+        var velocidadeAnterior = opcoes.Speed;
+
+        try
+        {
+            _status.Set(AssistantState.Speaking);
+            _tts ??= _services.GetRequiredService<ITextToSpeech>();
+            _player ??= _services.GetRequiredService<IAudioPlayer>();
+
+            opcoes.Voice = voz;
+            opcoes.Speed = (float)velocidade;
+
+            var mp3 = await _tts.SynthesizeAsync(FrasePrevia);
+            await _player.PlayMp3Async(mp3);
+        }
+        catch (Exception ex)
+        {
+            _log.Adicionar("error", $"[erro na prévia de voz] {ex.Message}");
+        }
+        finally
+        {
+            opcoes.Voice = vozAnterior;
+            opcoes.Speed = velocidadeAnterior;
+            _status.Set(AssistantState.Idle);
+        }
     }
 
     public async Task EnviarTextoAsync(string texto)

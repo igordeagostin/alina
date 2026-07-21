@@ -16,7 +16,10 @@ public sealed class LlmOptions
     /// <summary>Chave de API. Configure via user-secrets, nunca commite.</summary>
     public string? ApiKey { get; set; }
 
-    /// <summary>Modelo a ser usado (ex: gpt-4o-mini).</summary>
+    /// <summary>
+    /// Modelo a ser usado. Depende do <see cref="Provider"/>: para OpenAI, ex.
+    /// "gpt-4o" ou "gpt-4.1"; para Anthropic, ex. "claude-opus-4-8" ou "claude-sonnet-5".
+    /// </summary>
     public string Model { get; set; } = "gpt-4o-mini";
 
     /// <summary>Endpoint opcional (para APIs compatíveis com OpenAI).</summary>
