@@ -17,9 +17,11 @@ public interface IAudioRecorder
 {
     /// <summary>
     /// Grava do microfone até <paramref name="waitForStop"/> concluir (push-to-talk).
-    /// Retorna o áudio no formato WAV (PCM 16 kHz mono).
+    /// Retorna o áudio no formato WAV (PCM 16 kHz mono). Se <paramref name="nivel"/>
+    /// for informado, reporta a amplitude normalizada (0–1) a cada bloco capturado,
+    /// para alimentar visualizações (waveform).
     /// </summary>
-    Task<byte[]> RecordAsync(Func<CancellationToken, Task> waitForStop, CancellationToken cancellationToken = default);
+    Task<byte[]> RecordAsync(Func<CancellationToken, Task> waitForStop, IProgress<float>? nivel = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Reproduz áudio.</summary>

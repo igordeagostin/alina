@@ -1,10 +1,12 @@
 @using Alina.App.Services
 @using Alina.Core.Orchestration
+@using Microsoft.JSInterop
 @inject ShellUiState UiState
 @inject IAssistantStatus Status
 @inject VoiceController Voz
 @inject ConversationUiState Log
 @inject UiConfirmationService Confirmacao
+@inject IJSRuntime JS
 @implements IDisposable
 
 <div class="shell @(UiState.Compacto ? "shell--compacto" : "shell--detalhado") shell--@Status.Current.ToString().ToLowerInvariant()">
@@ -17,9 +19,13 @@
     </div>
 
     <div class="voz">
-        <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@Ocupado" title="@RotuloMicrofone">
-            <span class="orb__pulso"></span>
-        </button>
+        <div class="orb-area">
+            <span class="orb__aura"></span>
+            <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@Ocupado" title="@RotuloMicrofone">
+                <span class="orb__pulso"></span>
+            </button>
+        </div>
+        <canvas id="waveform" class="waveform"></canvas>
         <div class="voz__estado">@TextoEstado</div>
         <div class="voz__dica">@DicaEstado</div>
     </div>
@@ -69,6 +75,7 @@
 @code {
     private string _input = string.Empty;
     private ConfirmationRequest? _confirmacaoPendente;
+    private bool _jsPronto;
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
@@ -101,7 +108,16 @@
         UiState.ModoAlterado += AoAlterar;
         Status.Changed += AoMudarStatus;
         Log.Alterado += AoAlterar;
+        Voz.NivelAudio += AoNivelAudio;
         Confirmacao.Requested += AoSolicitarConfirmacao;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _jsPronto = true;
+        }
     }
 
     public void Dispose()
@@ -109,12 +125,33 @@
         UiState.ModoAlterado -= AoAlterar;
         Status.Changed -= AoMudarStatus;
         Log.Alterado -= AoAlterar;
+        Voz.NivelAudio -= AoNivelAudio;
         Confirmacao.Requested -= AoSolicitarConfirmacao;
     }
 
     private void AoAlterar() => InvokeAsync(StateHasChanged);
 
     private void AoMudarStatus(object? sender, AssistantState state) => InvokeAsync(StateHasChanged);
+
+    private void AoNivelAudio(float nivel)
+    {
+        if (!_jsPronto)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("alinaWaveform.push", nivel);
+            }
+            catch
+            {
+                // interop pode não estar pronta em transições; ignora
+            }
+        });
+    }
 
     private Task AoSolicitarConfirmacao(ConfirmationRequest request)
     {

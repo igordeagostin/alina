@@ -24,6 +24,9 @@ public sealed class VoiceController
     private IAudioPlayer? _player;
     private TaskCompletionSource? _pararGravacao;
 
+    /// <summary>Amplitude do microfone (0–1) durante a gravação, para a waveform.</summary>
+    public event Action<float>? NivelAudio;
+
     public VoiceController(IServiceProvider services, IAssistantStatus status, ConversationUiState log)
     {
         _services = services;
@@ -52,7 +55,8 @@ public sealed class VoiceController
             _status.Set(AssistantState.Listening);
             _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            var wav = await _recorder.RecordAsync(_ => _pararGravacao.Task);
+            var nivel = new ProgressoSincrono(v => NivelAudio?.Invoke(v));
+            var wav = await _recorder.RecordAsync(_ => _pararGravacao.Task, nivel);
 
             _status.Set(AssistantState.Thinking);
             var texto = await _stt.TranscribeAsync(wav);
@@ -122,5 +126,15 @@ public sealed class VoiceController
         }
 
         _status.Set(AssistantState.Idle);
+    }
+
+    /// <summary>Reporta o progresso de forma síncrona na thread de captura (baixa latência).</summary>
+    private sealed class ProgressoSincrono : IProgress<float>
+    {
+        private readonly Action<float> _acao;
+
+        public ProgressoSincrono(Action<float> acao) => _acao = acao;
+
+        public void Report(float value) => _acao(value);
     }
 }

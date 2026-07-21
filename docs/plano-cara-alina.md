@@ -192,15 +192,23 @@ mostrar uma e esconder a outra, com fade.
 | **A** ✅ | Projeto `Alina.App` + DI reusada + confirmação gráfica + 1 janela simples (texto → `SendAsync` → resposta). | Digito no app e recebo resposta da Alina rodando dentro do shell WPF. |
 | **B** ✅ | `IAssistantStatus` no Core (+ `StatusTrackingFunction` marcando `Executing` por tool) + modo compacto e detalhado + alternância + confirmação como overlay na janela. | Orbe reflete os estados; alterno entre os dois modos; confirmações aparecem no app. |
 | **C** ✅ | Tray + hotkey global de push-to-talk + autostart. | Falo pela hotkey de qualquer app; ícone na bandeja; inicia com o Windows. |
-| **D** | Capricho visual: glow, waveform reativa, transições. | Visual "Jarvis" — orbe glowando e waveform reagindo à voz. |
+| **D** ✅ | Capricho visual: glow, waveform reativa, transições. | Visual "Jarvis" — orbe glowando e waveform reagindo à voz. |
 
-> **Status:** Fases A, B e C concluídas. O fluxo de voz vive no `VoiceController`
+> **Status:** Fases A, B, C e D concluídas. O fluxo de voz vive no `VoiceController`
 > (compartilhado entre o clique no orbe e a hotkey global **Ctrl+Espaço**).
 > Push-to-talk é **por toque** (toca para gravar, toca de novo para enviar): o
 > `RegisterHotKey` só sinaliza o pressionar, então "segurar para falar" exigiria um
 > low-level keyboard hook — refinamento adiado. Tray com ícone âmbar (mostrar/ocultar,
 > alternar modo, autostart, sair); fechar no X minimiza para a bandeja; autostart via
 > chave `Run` do usuário, iniciando com `--tray`.
+>
+> Fase D: orbe com glow âmbar em camadas + aura pulsante por estado; waveform reativa
+> ao microfone (o `IAudioRecorder` reporta a amplitude, empurrada ao canvas via JS
+> interop — `waveform.js`); transições suaves de estado e entrada de mensagens.
+>
+> **Polimento remanescente (fora do escopo das fases):** janela compacta *borderless*
+> transparente estilo widget com click-through (quirk do WebView2 transparente) e
+> "segurar para falar" via low-level hook — ambos opcionais.
 
 ## 9. Riscos e mitigações
 
