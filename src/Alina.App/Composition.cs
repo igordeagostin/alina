@@ -1,5 +1,6 @@
 using Alina.App.Services;
 using Alina.Core.Orchestration;
+using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
 using Alina.Infrastructure.DependencyInjection;
@@ -74,9 +75,15 @@ public static class Composition
         builder.Services.AddSingleton<ITool, FileReadTool>();
 
         // Servidor de permissão (Opção A): pedidos de permissão do Claude Code em modo headless
-        // aparecem como confirmação na UI (overlay), em vez de serem bloqueados silenciosamente.
+        // aparecem como overlay na UI (com opções de escopo), em vez de serem bloqueados.
+        // A política decide automaticamente o que já foi liberado antes de interromper.
+        builder.Services.AddSingleton<UiConfirmacaoPermissao>();
+        builder.Services.AddSingleton<IConfirmacaoPermissao>(sp => sp.GetRequiredService<UiConfirmacaoPermissao>());
         builder.Services.AddSingleton<IServidorPermissao>(sp =>
-            new ServidorPermissaoMcp(sp.GetRequiredService<IConfirmationService>()));
+            new ServidorPermissaoMcp(
+                sp.GetRequiredService<IPoliticaPermissao>(),
+                sp.GetRequiredService<IConfirmacaoPermissao>(),
+                sp.GetRequiredService<IContextoPermissao>()));
 
         // Claude Code (Fase 3)
         var claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();

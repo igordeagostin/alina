@@ -1,3 +1,4 @@
+using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -12,20 +13,28 @@ namespace Alina.Mcp;
 /// <summary>
 /// Servidor MCP HTTP hospedado dentro do próprio processo da Alina, em <c>127.0.0.1</c>, que
 /// atende os pedidos de permissão do Claude Code (<c>--permission-prompt-tool</c>). Como roda
-/// no mesmo processo, o handler tem acesso direto ao <see cref="IConfirmationService"/> — sem IPC.
+/// no mesmo processo, o handler consulta a política e a confirmação diretamente — sem IPC.
 /// </summary>
 public sealed class ServidorPermissaoMcp : IServidorPermissao
 {
-    private readonly IConfirmationService _confirmacao;
+    private readonly IPoliticaPermissao _politica;
+    private readonly IConfirmacaoPermissao _confirmacao;
+    private readonly IContextoPermissao _contexto;
     private readonly int _porta;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private WebApplication? _app;
     private string? _url;
 
     /// <param name="porta">Porta TCP em 127.0.0.1; use <c>0</c> para uma porta efêmera livre.</param>
-    public ServidorPermissaoMcp(IConfirmationService confirmacao, int porta = 0)
+    public ServidorPermissaoMcp(
+        IPoliticaPermissao politica,
+        IConfirmacaoPermissao confirmacao,
+        IContextoPermissao contexto,
+        int porta = 0)
     {
+        _politica = politica;
         _confirmacao = confirmacao;
+        _contexto = contexto;
         _porta = porta;
     }
 
@@ -55,7 +64,9 @@ public sealed class ServidorPermissaoMcp : IServidorPermissao
             var builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders();
             builder.WebHost.UseUrls($"http://127.0.0.1:{_porta}");
+            builder.Services.AddSingleton(_politica);
             builder.Services.AddSingleton(_confirmacao);
+            builder.Services.AddSingleton(_contexto);
             builder.Services.AddMcpServer().WithHttpTransport().WithTools<FerramentaPermissao>();
 
             var app = builder.Build();

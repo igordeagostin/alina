@@ -1,3 +1,5 @@
+using Alina.Core.Permissoes;
+using Alina.Infrastructure.Permissoes;
 using Alina.Mcp;
 using Alina.Tools.ClaudeCode;
 
@@ -46,14 +48,18 @@ public sealed class ClaudeCodeIntegrationTests
         Directory.CreateDirectory(dir);
 
         // Aprova automaticamente cada pedido de permissão que chegar ao servidor MCP.
-        await using var servidor = new ServidorPermissaoMcp(new FakeConfirmationService(result: true));
+        var contexto = new ContextoPermissao();
+        var politica = new PoliticaPermissao(Path.Combine(dir, "permissoes.json"));
+        var confirmacao = new ConfirmacaoPermissaoBasica(new FakeConfirmationService(result: true));
+        await using var servidor = new ServidorPermissaoMcp(politica, confirmacao, contexto);
 
         try
         {
             var tool = new ClaudeCodeTool(
                 new FakeConfirmationService(result: true),
                 new ClaudeCodeOptions { Streaming = true, PermissaoInterativa = true, MaxTurns = 8 },
-                servidor);
+                servidor,
+                contexto);
 
             var eventos = new List<EventoProgressoClaudeCode>();
             tool.Progresso += eventos.Add;

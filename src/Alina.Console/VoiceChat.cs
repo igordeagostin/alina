@@ -19,6 +19,7 @@ public sealed class VoiceChat
     private readonly IAudioPlayer _player;
     private readonly VoiceOptions _options;
     private readonly ConfirmacaoRoteada _confirmacao;
+    private readonly ConfirmacaoPermissaoRoteada _confirmacaoPermissao;
 
     public VoiceChat(
         IOrchestrator orchestrator,
@@ -27,7 +28,8 @@ public sealed class VoiceChat
         IAudioRecorder recorder,
         IAudioPlayer player,
         VoiceOptions options,
-        ConfirmacaoRoteada confirmacao)
+        ConfirmacaoRoteada confirmacao,
+        ConfirmacaoPermissaoRoteada confirmacaoPermissao)
     {
         _orchestrator = orchestrator;
         _stt = stt;
@@ -36,6 +38,7 @@ public sealed class VoiceChat
         _player = player;
         _options = options;
         _confirmacao = confirmacao;
+        _confirmacaoPermissao = confirmacaoPermissao;
     }
 
     /// <summary>Executa o sub-loop de voz até o usuário digitar /texto ou /sair.</summary>
@@ -48,6 +51,11 @@ public sealed class VoiceChat
         // o console continua como fallback se a voz não compreender.
         var vozConfirmacao = new VozConfirmationService(_tts, _stt, _recorder, _player, _options, fallback: new ConsoleConfirmationService());
         _confirmacao.DefinirVoz(vozConfirmacao);
+
+        var vozPermissao = new ConfirmacaoPermissaoVoz(_tts, _stt, _recorder, _player, _options,
+            fallback: new ConfirmacaoPermissaoConsole());
+        _confirmacaoPermissao.DefinirVoz(vozPermissao);
+
         _confirmacao.ModoVoz = true;
         try
         {

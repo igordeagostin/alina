@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Alina.Core.Permissoes;
+using Alina.Infrastructure.Permissoes;
 using Alina.Mcp;
 using Alina.Tools.ClaudeCode;
 
@@ -56,10 +58,18 @@ public sealed class PermissaoTests
         Assert.Equal("http://127.0.0.1:5123/mcp", servidor.GetProperty("url").GetString());
     }
 
+    private static ServidorPermissaoMcp CriarServidor()
+    {
+        var arquivo = Path.Combine(Path.GetTempPath(), "alina-pol-" + Guid.NewGuid().ToString("n") + ".json");
+        var politica = new PoliticaPermissao(arquivo);
+        var confirmacao = new ConfirmacaoPermissaoBasica(new FakeConfirmationService(result: true));
+        return new ServidorPermissaoMcp(politica, confirmacao, new ContextoPermissao(), porta: 0);
+    }
+
     [Fact]
     public async Task ServidorPermissao_inicia_em_localhost_e_expoe_url_mcp()
     {
-        await using var servidor = new ServidorPermissaoMcp(new FakeConfirmationService(result: true), porta: 0);
+        await using var servidor = CriarServidor();
 
         var url = await servidor.IniciarAsync();
 

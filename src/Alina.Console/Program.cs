@@ -2,6 +2,7 @@ using Alina.Console;
 using Alina.Core.Memory;
 using Alina.Core.Orchestration;
 using Alina.Core.Tools;
+using Alina.Core.Permissoes;
 using Alina.Infrastructure.Configuration;
 using Alina.Infrastructure.DependencyInjection;
 using Alina.Mcp;
@@ -39,10 +40,19 @@ builder.Services.AddSingleton<IConfirmationService>(confirmation);
 builder.Services.AddSingleton<ITool, TerminalTool>();
 builder.Services.AddSingleton<ITool, FileReadTool>();
 
-// Servidor de permissão (Opção A): atende os pedidos do Claude Code em modo headless,
-// perguntando ao usuário (voz/console) em vez de bloquear silenciosamente.
+// Confirmação de permissão com escopo (uma vez / sempre / sempre neste diretório),
+// roteada entre console e voz conforme o modo ativo.
+var confirmacaoPermissao = new ConfirmacaoPermissaoRoteada(confirmation, new ConfirmacaoPermissaoConsole());
+builder.Services.AddSingleton(confirmacaoPermissao);
+builder.Services.AddSingleton<IConfirmacaoPermissao>(confirmacaoPermissao);
+
+// Servidor de permissão (Opção A): consulta a política e, quando necessário, pergunta ao
+// usuário (voz/console) em vez de bloquear silenciosamente.
 builder.Services.AddSingleton<IServidorPermissao>(sp =>
-    new ServidorPermissaoMcp(sp.GetRequiredService<IConfirmationService>()));
+    new ServidorPermissaoMcp(
+        sp.GetRequiredService<IPoliticaPermissao>(),
+        sp.GetRequiredService<IConfirmacaoPermissao>(),
+        sp.GetRequiredService<IContextoPermissao>()));
 
 // Tool do Claude Code (Fase 3) — registrada como concreta e como ITool (mesma instância)
 var claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();

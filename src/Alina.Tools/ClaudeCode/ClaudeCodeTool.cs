@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Microsoft.Extensions.AI;
 
@@ -24,12 +25,18 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private readonly ClaudeCodeOptions _options;
     private readonly IServidorPermissao? _servidorPermissao;
+    private readonly IContextoPermissao? _contexto;
 
-    public ClaudeCodeTool(IConfirmationService confirmation, ClaudeCodeOptions options, IServidorPermissao? servidorPermissao = null)
+    public ClaudeCodeTool(
+        IConfirmationService confirmation,
+        ClaudeCodeOptions options,
+        IServidorPermissao? servidorPermissao = null,
+        IContextoPermissao? contexto = null)
         : base(confirmation)
     {
         _options = options;
         _servidorPermissao = servidorPermissao;
+        _contexto = contexto;
     }
 
     public override string Name => "delegar_claude_code";
@@ -99,6 +106,11 @@ public sealed class ClaudeCodeTool : ToolBase
         var permissao = await ResolverPermissaoAsync(cancellationToken);
         var psi = BuildStartInfo(directory, permissao);
 
+        if (_contexto is not null)
+        {
+            _contexto.DiretorioAtual = directory ?? Environment.CurrentDirectory;
+        }
+
         try
         {
             using var process = new Process { StartInfo = psi };
@@ -119,6 +131,13 @@ public sealed class ClaudeCodeTool : ToolBase
         {
             return $"Erro ao executar o Claude Code: {ex.Message}. " +
                    $"Verifique se o executável '{_options.Executable}' está no PATH ou configure 'ClaudeCode:Executable'.";
+        }
+        finally
+        {
+            if (_contexto is not null)
+            {
+                _contexto.DiretorioAtual = null;
+            }
         }
     }
 

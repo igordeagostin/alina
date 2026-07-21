@@ -1,9 +1,11 @@
 using Alina.Core.Memory;
 using Alina.Core.Orchestration;
+using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
 using Alina.Infrastructure.Llm;
 using Alina.Infrastructure.Memory;
+using Alina.Infrastructure.Permissoes;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +33,11 @@ public static class ServiceCollectionExtensions
             new FileProfileStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value.ResolvePreferencesFile()));
         services.AddSingleton<IMemoryStore>(sp =>
             new JsonMemoryStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
+
+        // Política de permissões: decide o que liberar/perguntar antes de interromper o usuário.
+        services.AddSingleton<IPoliticaPermissao>(sp =>
+            new PoliticaPermissao(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
+        services.AddSingleton<IContextoPermissao, ContextoPermissao>();
 
         // Recuperação seletiva de memória (índice leve + top-K semântico). O gerador de
         // embeddings é opcional: sem chave/desabilitado, o retriever cai para keyword.

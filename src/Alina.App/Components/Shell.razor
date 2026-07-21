@@ -1,11 +1,14 @@
 @using Alina.App.Services
 @using Alina.Core.Orchestration
+@using Alina.Core.Permissoes
 @using Microsoft.JSInterop
 @inject ShellUiState UiState
 @inject IAssistantStatus Status
 @inject VoiceController Voz
 @inject ConversationUiState Log
 @inject UiConfirmationService Confirmacao
+@inject UiConfirmacaoPermissao ConfirmacaoPermissao
+@inject IPoliticaPermissao Politica
 @inject ConfiguracoesService Config
 @inject IJSRuntime JS
 @implements IDisposable
@@ -108,6 +111,52 @@
                            @bind="_edicao.VelocidadeFala" @bind:event="oninput" />
                 </label>
 
+                <div class="config__secao">Permissões do Claude Code</div>
+
+                <label class="config__linha">
+                    <span>Quando não houver regra</span>
+                    <select class="config__campo" @bind="_permOpcoes.ModoPadrao">
+                        <option value="@ModoPermissao.Perguntar">Perguntar o que não for coberto</option>
+                        <option value="@ModoPermissao.AutoLeitura">Auto-permitir leitura</option>
+                        <option value="@ModoPermissao.AceitarEdicoes">Aceitar edições</option>
+                        <option value="@ModoPermissao.Autonomia">Autonomia total</option>
+                    </select>
+                </label>
+
+                <label class="config__linha">
+                    <span>Confirmar ações fora dos diretórios confiáveis</span>
+                    <input type="checkbox" @bind="_permOpcoes.ConfirmarForaDoWorkspace" />
+                </label>
+
+                <div class="config__grupo">
+                    <span class="config__grupo-titulo">Diretórios confiáveis (permissão total)</span>
+                    @foreach (var d in _permOpcoes.DiretoriosConfiaveis.ToList())
+                    {
+                        <div class="config__item">
+                            <code class="config__item-texto">@d</code>
+                            <button class="config__link" @onclick="() => RemoverDiretorio(d)">remover</button>
+                        </div>
+                    }
+                    <div class="config__item">
+                        <input class="config__campo" @bind="_novoDiretorio" placeholder="D:\meus-projetos\alina" />
+                        <button class="config__link" @onclick="AdicionarDiretorio">adicionar</button>
+                    </div>
+                </div>
+
+                @if (Politica.Regras.Count > 0)
+                {
+                    <div class="config__grupo">
+                        <span class="config__grupo-titulo">Regras aprendidas</span>
+                        @foreach (var r in Politica.Regras)
+                        {
+                            <div class="config__item">
+                                <code class="config__item-texto">@(r.Permitir ? "✓" : "✕") @(r.Rotulo ?? r.Ferramenta)</code>
+                                <button class="config__link" @onclick="() => RemoverRegra(r.Id)">remover</button>
+                            </div>
+                        }
+                    </div>
+                }
+
                 <div class="config__botoes">
                     <button class="config__cancelar" @onclick="FecharConfiguracoes">Cancelar</button>
                     <button class="config__salvar" @onclick="SalvarConfiguracoes">Salvar</button>
@@ -133,16 +182,35 @@
             </div>
         </div>
     }
+
+    @if (_permissaoPendente is not null)
+    {
+        <div class="confirm">
+            <div class="confirm__caixa">
+                <div class="confirm__titulo">Permissão do Claude Code</div>
+                <div class="confirm__acao">@_permissaoPendente.Pedido.Descricao</div>
+                <div class="confirm__botoes confirm__botoes--escopo">
+                    <button class="confirm__nao" @onclick="() => ResponderPermissao(false, EscopoPermissao.UmaVez)">Não</button>
+                    <button class="confirm__sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.UmaVez)">Uma vez</button>
+                    <button class="confirm__sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.SempreNesteDiretorio)">Sempre aqui</button>
+                    <button class="confirm__sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.Sempre)">Sempre</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     private string _input = string.Empty;
     private ConfirmationRequest? _confirmacaoPendente;
+    private PedidoPermissaoUi? _permissaoPendente;
     private bool _jsPronto;
 
     private bool _configAberta;
     private ConfiguracoesApp _edicao = new();
     private bool _iniciarComWindows;
+    private PoliticaPermissaoOptions _permOpcoes = new();
+    private string _novoDiretorio = string.Empty;
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
@@ -177,6 +245,7 @@
         Log.Alterado += AoAlterar;
         Voz.NivelAudio += AoNivelAudio;
         Confirmacao.Requested += AoSolicitarConfirmacao;
+        ConfirmacaoPermissao.Requested += AoSolicitarPermissao;
     }
 
     protected override void OnAfterRender(bool firstRender)
@@ -194,6 +263,7 @@
         Log.Alterado -= AoAlterar;
         Voz.NivelAudio -= AoNivelAudio;
         Confirmacao.Requested -= AoSolicitarConfirmacao;
+        ConfirmacaoPermissao.Requested -= AoSolicitarPermissao;
     }
 
     private void AoAlterar() => InvokeAsync(StateHasChanged);
@@ -232,6 +302,45 @@
         _confirmacaoPendente = null;
     }
 
+    private Task AoSolicitarPermissao(PedidoPermissaoUi pedido)
+    {
+        _permissaoPendente = pedido;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void ResponderPermissao(bool autorizado, EscopoPermissao escopo)
+    {
+        _permissaoPendente?.Responder(autorizado
+            ? new RespostaConfirmacaoPermissao(true, escopo)
+            : RespostaConfirmacaoPermissao.Negada);
+        _permissaoPendente = null;
+    }
+
+    private void AdicionarDiretorio()
+    {
+        var dir = _novoDiretorio.Trim();
+        if (dir.Length > 0 && !_permOpcoes.DiretoriosConfiaveis.Contains(dir))
+        {
+            _permOpcoes.DiretoriosConfiaveis.Add(dir);
+        }
+        _novoDiretorio = string.Empty;
+    }
+
+    private void RemoverDiretorio(string dir) => _permOpcoes.DiretoriosConfiaveis.Remove(dir);
+
+    private void RemoverRegra(string id) => Politica.RemoverRegra(id);
+
+    private static PoliticaPermissaoOptions ClonarOpcoes(PoliticaPermissaoOptions o) => new()
+    {
+        ModoPadrao = o.ModoPadrao,
+        ConfirmarForaDoWorkspace = o.ConfirmarForaDoWorkspace,
+        DiretoriosConfiaveis = [.. o.DiretoriosConfiaveis],
+        FerramentasSomenteLeitura = [.. o.FerramentasSomenteLeitura],
+        ComandosPermitidos = [.. o.ComandosPermitidos],
+        ComandosSempreConfirmar = [.. o.ComandosSempreConfirmar],
+        CaminhosProtegidos = [.. o.CaminhosProtegidos],
+    };
+
     private void AlternarModo() => UiState.Alternar();
 
     private void AbrirConfiguracoes()
@@ -245,6 +354,8 @@
             VelocidadeFala = Config.Atual.VelocidadeFala,
         };
         _iniciarComWindows = Config.IniciarComWindows;
+        _permOpcoes = ClonarOpcoes(Politica.Opcoes);
+        _novoDiretorio = string.Empty;
         _configAberta = true;
     }
 
@@ -283,6 +394,7 @@
     {
         Config.IniciarComWindows = _iniciarComWindows;
         Config.Salvar(_edicao);
+        Politica.AtualizarOpcoes(_permOpcoes);
         _configAberta = false;
     }
 
