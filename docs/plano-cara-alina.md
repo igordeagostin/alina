@@ -189,10 +189,14 @@ mostrar uma e esconder a outra, com fade.
 
 | Fase | Entrega | Aceite |
 |---|---|---|
-| **A** | Projeto `Alina.App` + DI reusada + `GuiConfirmationService` + 1 janela simples (texto → `SendAsync` → resposta). | Digito no app e recebo resposta da Alina rodando dentro do shell WPF. |
-| **B** | `IAssistantStatus` no Core + modo compacto e detalhado + alternância + confirmação na UI. | Orbe reflete os estados; alterno entre os dois modos; confirmações aparecem no app. |
+| **A** ✅ | Projeto `Alina.App` + DI reusada + confirmação gráfica + 1 janela simples (texto → `SendAsync` → resposta). | Digito no app e recebo resposta da Alina rodando dentro do shell WPF. |
+| **B** ✅ | `IAssistantStatus` no Core (+ `StatusTrackingFunction` marcando `Executing` por tool) + modo compacto e detalhado + alternância + confirmação como overlay na janela. | Orbe reflete os estados; alterno entre os dois modos; confirmações aparecem no app. |
 | **C** | Tray + hotkey global de push-to-talk + autostart. | Falo segurando a hotkey de qualquer app; ícone na bandeja; inicia com o Windows. |
 | **D** | Capricho visual: glow, waveform reativa, transições. | Visual "Jarvis" — orbe glowando e waveform reagindo à voz. |
+
+> **Status:** Fases A e B concluídas. Na Fase B o modo de voz do app usa
+> push-to-talk **por clique** no orbe; a hotkey global mãos-livres vem na Fase C.
+> A confirmação passou de `MessageBox` nativo para overlay Blazor dentro da janela.
 
 ## 9. Riscos e mitigações
 

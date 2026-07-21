@@ -45,8 +45,9 @@ public static class Composition
         builder.Services.AddBlazorWebViewDeveloperTools();
 #endif
 
-        // Confirmação gráfica (substitui o ConsoleConfirmationService)
-        var confirmation = new GuiConfirmationService();
+        // Confirmação como overlay dentro da janela (substitui o ConsoleConfirmationService)
+        var confirmation = new UiConfirmationService();
+        builder.Services.AddSingleton(confirmation);
         builder.Services.AddSingleton<IConfirmationService>(confirmation);
 
         // Estado de UI compartilhado (modo compacto/detalhado)

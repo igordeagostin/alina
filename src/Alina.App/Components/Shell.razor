@@ -3,9 +3,11 @@
 @using Alina.Voice
 @inject IServiceProvider Services
 @inject ShellUiState UiState
+@inject IAssistantStatus Status
+@inject UiConfirmationService Confirmacao
 @implements IDisposable
 
-<div class="shell @(UiState.Compacto ? "shell--compacto" : "shell--detalhado") shell--@_estado.ToString().ToLowerInvariant()">
+<div class="shell @(UiState.Compacto ? "shell--compacto" : "shell--detalhado") shell--@Status.Current.ToString().ToLowerInvariant()">
     <div class="shell__header">
         <div class="orb orb--mini"></div>
         <div class="shell__title">Alina</div>
@@ -15,7 +17,7 @@
     </div>
 
     <div class="voz">
-        <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@(_estado is Estado.Pensando or Estado.Falando)" title="@RotuloMicrofone">
+        <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@(Ocupado)" title="@RotuloMicrofone">
             <span class="orb__pulso"></span>
         </button>
         <div class="voz__estado">@TextoEstado</div>
@@ -27,7 +29,7 @@
         {
             <div class="msg msg--@m.Kind">@m.Text</div>
         }
-        @if (_estado == Estado.Pensando)
+        @if (Status.Current == AssistantState.Thinking)
         {
             <div class="msg msg--bot msg--pending">pensando…</div>
         }
@@ -44,14 +46,29 @@
             Enviar
         </button>
     </div>
+
+    @if (_confirmacaoPendente is not null)
+    {
+        <div class="confirm">
+            <div class="confirm__caixa">
+                <div class="confirm__titulo">Confirmar ação</div>
+                <div class="confirm__acao">@_confirmacaoPendente.Action</div>
+                @if (!string.IsNullOrWhiteSpace(_confirmacaoPendente.Details))
+                {
+                    <pre class="confirm__detalhe">@_confirmacaoPendente.Details</pre>
+                }
+                <div class="confirm__botoes">
+                    <button class="confirm__nao" @onclick="() => Responder(false)">Não</button>
+                    <button class="confirm__sim" @onclick="() => Responder(true)">Sim</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
-    private enum Estado { Parada, Ouvindo, Pensando, Falando }
-
     private readonly List<Message> _messages = new();
     private string _input = string.Empty;
-    private Estado _estado = Estado.Parada;
 
     private IOrchestrator? _orchestrator;
     private IAudioRecorder? _recorder;
@@ -60,36 +77,63 @@
     private IAudioPlayer? _player;
 
     private TaskCompletionSource? _pararGravacao;
+    private ConfirmationRequest? _confirmacaoPendente;
 
-    private bool Ocupado => _estado is Estado.Pensando or Estado.Falando;
+    private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
-    private string RotuloMicrofone => _estado switch
+    private string RotuloMicrofone => Status.Current switch
     {
-        Estado.Ouvindo => "Parar de gravar",
-        Estado.Pensando => "Processando…",
-        Estado.Falando => "Falando…",
+        AssistantState.Listening => "Parar de gravar",
+        AssistantState.Thinking or AssistantState.Executing => "Processando…",
+        AssistantState.Speaking => "Falando…",
         _ => "Falar com a Alina",
     };
 
-    private string TextoEstado => _estado switch
+    private string TextoEstado => Status.Current switch
     {
-        Estado.Ouvindo => "ouvindo…",
-        Estado.Pensando => "pensando…",
-        Estado.Falando => "falando…",
+        AssistantState.Listening => "ouvindo…",
+        AssistantState.Thinking => "pensando…",
+        AssistantState.Executing => "executando…",
+        AssistantState.Speaking => "falando…",
         _ => "toque para falar",
     };
 
-    private string DicaEstado => _estado switch
+    private string DicaEstado => Status.Current switch
     {
-        Estado.Ouvindo => "toque de novo para enviar",
+        AssistantState.Listening => "toque de novo para enviar",
+        AssistantState.Executing => "rodando uma ferramenta",
         _ => "modo voz — o padrão da Alina",
     };
 
-    protected override void OnInitialized() => UiState.ModoAlterado += AoAlterarModo;
+    protected override void OnInitialized()
+    {
+        UiState.ModoAlterado += AoAlterarModo;
+        Status.Changed += AoMudarStatus;
+        Confirmacao.Requested += AoSolicitarConfirmacao;
+    }
 
-    public void Dispose() => UiState.ModoAlterado -= AoAlterarModo;
+    public void Dispose()
+    {
+        UiState.ModoAlterado -= AoAlterarModo;
+        Status.Changed -= AoMudarStatus;
+        Confirmacao.Requested -= AoSolicitarConfirmacao;
+    }
 
     private void AoAlterarModo() => InvokeAsync(StateHasChanged);
+
+    private void AoMudarStatus(object? sender, AssistantState state) => InvokeAsync(StateHasChanged);
+
+    private Task AoSolicitarConfirmacao(ConfirmationRequest request)
+    {
+        _confirmacaoPendente = request;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void Responder(bool autorizado)
+    {
+        _confirmacaoPendente?.Responder(autorizado);
+        _confirmacaoPendente = null;
+    }
 
     private void AlternarModo() => UiState.Alternar();
 
@@ -103,13 +147,13 @@
 
     private async Task AlternarEscutaAsync()
     {
-        if (_estado == Estado.Ouvindo)
+        if (Status.Current == AssistantState.Listening)
         {
             _pararGravacao?.TrySetResult();
             return;
         }
 
-        if (_estado != Estado.Parada)
+        if (Status.Current != AssistantState.Idle)
         {
             return;
         }
@@ -119,18 +163,17 @@
             _recorder ??= Services.GetRequiredService<IAudioRecorder>();
             _stt ??= Services.GetRequiredService<ISpeechToText>();
 
-            _estado = Estado.Ouvindo;
+            Status.Set(AssistantState.Listening);
             _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var wav = await _recorder.RecordAsync(_ => _pararGravacao.Task);
-            _estado = Estado.Pensando;
-            StateHasChanged();
 
+            Status.Set(AssistantState.Thinking);
             var texto = await _stt.TranscribeAsync(wav);
             if (string.IsNullOrWhiteSpace(texto))
             {
                 _messages.Add(new Message("error", "(não entendi nada, tente de novo)"));
-                _estado = Estado.Parada;
+                Status.Set(AssistantState.Idle);
                 return;
             }
 
@@ -140,7 +183,7 @@
         catch (Exception ex)
         {
             _messages.Add(new Message("error", $"[erro no modo voz] {ex.Message}"));
-            _estado = Estado.Parada;
+            Status.Set(AssistantState.Idle);
         }
     }
 
@@ -159,8 +202,7 @@
 
     private async Task ResponderAsync(string texto, bool comVoz)
     {
-        _estado = Estado.Pensando;
-        StateHasChanged();
+        Status.Set(AssistantState.Thinking);
 
         string resposta;
         try
@@ -173,7 +215,7 @@
         catch (Exception ex)
         {
             _messages.Add(new Message("error", $"[erro] {ex.Message}"));
-            _estado = Estado.Parada;
+            Status.Set(AssistantState.Idle);
             return;
         }
 
@@ -181,9 +223,7 @@
         {
             try
             {
-                _estado = Estado.Falando;
-                StateHasChanged();
-
+                Status.Set(AssistantState.Speaking);
                 _tts ??= Services.GetRequiredService<ITextToSpeech>();
                 _player ??= Services.GetRequiredService<IAudioPlayer>();
 
@@ -196,7 +236,7 @@
             }
         }
 
-        _estado = Estado.Parada;
+        Status.Set(AssistantState.Idle);
     }
 
     private sealed record Message(string Kind, string Text);

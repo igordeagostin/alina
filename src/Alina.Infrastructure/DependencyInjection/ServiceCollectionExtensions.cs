@@ -41,6 +41,10 @@ public static class ServiceCollectionExtensions
             return new MemoryRetriever(sp.GetRequiredService<IMemoryStore>(), generator, options.EmbeddingModel);
         });
 
+        // Status da assistente (orbe/estado) — os heads de UI assinam o evento;
+        // o console simplesmente ignora.
+        services.AddSingleton<IAssistantStatus, AssistantStatus>();
+
         // ToolRegistry agrega as ITool registradas pela camada de UI (composição).
         // Registre as tools concretas e o IConfirmationService no projeto de UI.
         services.AddSingleton<ToolRegistry>();
