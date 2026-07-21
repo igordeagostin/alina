@@ -1,9 +1,9 @@
 @using Alina.App.Services
 @using Alina.Core.Orchestration
-@using Alina.Voice
-@inject IServiceProvider Services
 @inject ShellUiState UiState
 @inject IAssistantStatus Status
+@inject VoiceController Voz
+@inject ConversationUiState Log
 @inject UiConfirmationService Confirmacao
 @implements IDisposable
 
@@ -17,7 +17,7 @@
     </div>
 
     <div class="voz">
-        <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@(Ocupado)" title="@RotuloMicrofone">
+        <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@Ocupado" title="@RotuloMicrofone">
             <span class="orb__pulso"></span>
         </button>
         <div class="voz__estado">@TextoEstado</div>
@@ -25,9 +25,9 @@
     </div>
 
     <div class="shell__log">
-        @foreach (var m in _messages)
+        @foreach (var m in Log.Snapshot())
         {
-            <div class="msg msg--@m.Kind">@m.Text</div>
+            <div class="msg msg--@m.Tipo">@m.Texto</div>
         }
         @if (Status.Current == AssistantState.Thinking)
         {
@@ -67,16 +67,7 @@
 </div>
 
 @code {
-    private readonly List<Message> _messages = new();
     private string _input = string.Empty;
-
-    private IOrchestrator? _orchestrator;
-    private IAudioRecorder? _recorder;
-    private ISpeechToText? _stt;
-    private ITextToSpeech? _tts;
-    private IAudioPlayer? _player;
-
-    private TaskCompletionSource? _pararGravacao;
     private ConfirmationRequest? _confirmacaoPendente;
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
@@ -86,7 +77,7 @@
         AssistantState.Listening => "Parar de gravar",
         AssistantState.Thinking or AssistantState.Executing => "Processando…",
         AssistantState.Speaking => "Falando…",
-        _ => "Falar com a Alina",
+        _ => "Falar com a Alina (Ctrl+Espaço)",
     };
 
     private string TextoEstado => Status.Current switch
@@ -102,24 +93,26 @@
     {
         AssistantState.Listening => "toque de novo para enviar",
         AssistantState.Executing => "rodando uma ferramenta",
-        _ => "modo voz — o padrão da Alina",
+        _ => "modo voz — Ctrl+Espaço de qualquer lugar",
     };
 
     protected override void OnInitialized()
     {
-        UiState.ModoAlterado += AoAlterarModo;
+        UiState.ModoAlterado += AoAlterar;
         Status.Changed += AoMudarStatus;
+        Log.Alterado += AoAlterar;
         Confirmacao.Requested += AoSolicitarConfirmacao;
     }
 
     public void Dispose()
     {
-        UiState.ModoAlterado -= AoAlterarModo;
+        UiState.ModoAlterado -= AoAlterar;
         Status.Changed -= AoMudarStatus;
+        Log.Alterado -= AoAlterar;
         Confirmacao.Requested -= AoSolicitarConfirmacao;
     }
 
-    private void AoAlterarModo() => InvokeAsync(StateHasChanged);
+    private void AoAlterar() => InvokeAsync(StateHasChanged);
 
     private void AoMudarStatus(object? sender, AssistantState state) => InvokeAsync(StateHasChanged);
 
@@ -137,6 +130,8 @@
 
     private void AlternarModo() => UiState.Alternar();
 
+    private Task AlternarEscutaAsync() => Voz.AlternarEscutaAsync();
+
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !e.ShiftKey)
@@ -145,99 +140,10 @@
         }
     }
 
-    private async Task AlternarEscutaAsync()
-    {
-        if (Status.Current == AssistantState.Listening)
-        {
-            _pararGravacao?.TrySetResult();
-            return;
-        }
-
-        if (Status.Current != AssistantState.Idle)
-        {
-            return;
-        }
-
-        try
-        {
-            _recorder ??= Services.GetRequiredService<IAudioRecorder>();
-            _stt ??= Services.GetRequiredService<ISpeechToText>();
-
-            Status.Set(AssistantState.Listening);
-            _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            var wav = await _recorder.RecordAsync(_ => _pararGravacao.Task);
-
-            Status.Set(AssistantState.Thinking);
-            var texto = await _stt.TranscribeAsync(wav);
-            if (string.IsNullOrWhiteSpace(texto))
-            {
-                _messages.Add(new Message("error", "(não entendi nada, tente de novo)"));
-                Status.Set(AssistantState.Idle);
-                return;
-            }
-
-            _messages.Add(new Message("user", texto));
-            await ResponderAsync(texto, comVoz: true);
-        }
-        catch (Exception ex)
-        {
-            _messages.Add(new Message("error", $"[erro no modo voz] {ex.Message}"));
-            Status.Set(AssistantState.Idle);
-        }
-    }
-
     private async Task EnviarTextoAsync()
     {
-        var texto = _input.Trim();
-        if (texto.Length == 0 || Ocupado)
-        {
-            return;
-        }
-
+        var texto = _input;
         _input = string.Empty;
-        _messages.Add(new Message("user", texto));
-        await ResponderAsync(texto, comVoz: false);
+        await Voz.EnviarTextoAsync(texto);
     }
-
-    private async Task ResponderAsync(string texto, bool comVoz)
-    {
-        Status.Set(AssistantState.Thinking);
-
-        string resposta;
-        try
-        {
-            _orchestrator ??= Services.GetRequiredService<IOrchestrator>();
-            resposta = await _orchestrator.SendAsync(texto);
-            resposta = string.IsNullOrWhiteSpace(resposta) ? "(sem resposta)" : resposta;
-            _messages.Add(new Message("bot", resposta));
-        }
-        catch (Exception ex)
-        {
-            _messages.Add(new Message("error", $"[erro] {ex.Message}"));
-            Status.Set(AssistantState.Idle);
-            return;
-        }
-
-        if (comVoz)
-        {
-            try
-            {
-                Status.Set(AssistantState.Speaking);
-                _tts ??= Services.GetRequiredService<ITextToSpeech>();
-                _player ??= Services.GetRequiredService<IAudioPlayer>();
-
-                var mp3 = await _tts.SynthesizeAsync(resposta);
-                await _player.PlayMp3Async(mp3);
-            }
-            catch (Exception ex)
-            {
-                _messages.Add(new Message("error", $"[erro na fala] {ex.Message}"));
-            }
-        }
-
-        Status.Set(AssistantState.Idle);
-    }
-
-    private sealed record Message(string Kind, string Text);
 }

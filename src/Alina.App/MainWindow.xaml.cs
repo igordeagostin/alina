@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using Alina.App.Components;
 using Alina.App.Services;
@@ -44,6 +45,19 @@ public partial class MainWindow : Window
             Width = LarguraDetalhada;
             Height = AlturaDetalhada;
         }
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        // Fechar no X apenas minimiza para a bandeja; sair de verdade é pelo menu.
+        if (System.Windows.Application.Current is App { Encerrando: false })
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
+        base.OnClosing(e);
     }
 
     protected override void OnClosed(EventArgs e)

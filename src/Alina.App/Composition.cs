@@ -53,6 +53,10 @@ public static class Composition
         // Estado de UI compartilhado (modo compacto/detalhado)
         builder.Services.AddSingleton<ShellUiState>();
 
+        // Log de conversa observável + controlador de voz (clique no orbe e hotkey global)
+        builder.Services.AddSingleton<ConversationUiState>();
+        builder.Services.AddSingleton<VoiceController>();
+
         // Tools básicas
         builder.Services.AddSingleton<ITool, TerminalTool>();
         builder.Services.AddSingleton<ITool, FileReadTool>();
