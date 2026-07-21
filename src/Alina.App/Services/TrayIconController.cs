@@ -6,8 +6,8 @@ namespace Alina.App.Services;
 
 /// <summary>
 /// Ícone de bandeja da Alina: mostra/oculta a janela, alterna o modo de tela,
-/// liga/desliga o autostart e encerra o app. O ícone é um orbe âmbar desenhado
-/// em runtime, coerente com a identidade visual.
+/// liga/desliga o autostart e encerra o app. Usa a logo oficial da Alina
+/// (Assets/alina.ico), coerente com a identidade visual.
 /// </summary>
 public sealed class TrayIconController : IDisposable
 {
@@ -73,18 +73,9 @@ public sealed class TrayIconController : IDisposable
 
     private static Icon CriarIcone()
     {
-        using var bitmap = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-            using var brush = new SolidBrush(ColorTranslator.FromHtml("#DFA53A"));
-            g.FillEllipse(brush, 4, 4, 24, 24);
-        }
-
-        var handle = bitmap.GetHicon();
-        using var temp = Icon.FromHandle(handle);
-        return (Icon)temp.Clone();
+        var uri = new Uri("pack://application:,,,/Assets/alina.ico");
+        using var stream = System.Windows.Application.GetResourceStream(uri)!.Stream;
+        return new Icon(stream, new System.Drawing.Size(32, 32));
     }
 
     public void Dispose()

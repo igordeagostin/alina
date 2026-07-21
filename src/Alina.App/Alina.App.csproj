@@ -10,6 +10,7 @@
     <RootNamespace>Alina.App</RootNamespace>
     <AssemblyName>Alina.App</AssemblyName>
     <UserSecretsId>alina-console</UserSecretsId>
+    <ApplicationIcon>Assets\alina.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,6 +28,12 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Resource Include="Assets\alina.ico" />
+  </ItemGroup>
+
+  <!-- Modelo de voz (Vosk), baixado à parte e não versionado: copiado para a saída quando presente. -->
+  <ItemGroup>
+    <None Update="Modelos\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

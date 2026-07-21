@@ -53,9 +53,20 @@ public static class Composition
         // Estado de UI compartilhado (modo compacto/detalhado)
         builder.Services.AddSingleton<ShellUiState>();
 
+        // Configurações do app (persistidas em JSON, aplicadas em runtime)
+        builder.Services.AddSingleton(sp => new ConfiguracoesService(
+            sp.GetRequiredService<IOptions<StorageOptions>>().Value,
+            sp.GetRequiredService<VoiceOptions>(),
+            sp.GetRequiredService<ShellUiState>(),
+            sp.GetRequiredService<GerenciadorPalavraAtivacao>()));
+
         // Log de conversa observável + controlador de voz (clique no orbe e hotkey global)
         builder.Services.AddSingleton<ConversationUiState>();
         builder.Services.AddSingleton<VoiceController>();
+
+        // Palavra de ativação ("Alina") — detecção local via Vosk + coordenação com o fluxo de voz
+        builder.Services.AddSingleton<IDetectorPalavraAtivacao, VoskDetectorPalavra>();
+        builder.Services.AddSingleton<GerenciadorPalavraAtivacao>();
 
         // Tools básicas
         builder.Services.AddSingleton<ITool, TerminalTool>();
@@ -88,6 +99,11 @@ public static class Composition
 
         // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
         var voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();
+        if (string.IsNullOrWhiteSpace(voiceOptions.CaminhoModeloVosk))
+        {
+            voiceOptions.CaminhoModeloVosk = Path.Combine(AppContext.BaseDirectory, "Modelos", "vosk-model-small-pt-0.3");
+        }
+
         builder.Services.AddSingleton(voiceOptions);
         builder.Services.AddSingleton<IAudioRecorder, NAudioRecorder>();
         builder.Services.AddSingleton<IAudioPlayer, NAudioPlayer>();

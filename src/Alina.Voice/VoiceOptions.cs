@@ -25,4 +25,16 @@ public sealed class VoiceOptions
 
     /// <summary>Velocidade da fala (1.0 = normal).</summary>
     public float Speed { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Caminho da pasta do modelo Vosk (descompactado) usado para detectar a palavra
+    /// de ativação localmente. Ex.: um modelo pequeno de português. Vazio desliga a detecção.
+    /// </summary>
+    public string? CaminhoModeloVosk { get; set; }
+
+    /// <summary>
+    /// Palavras/variações que acionam a assistente ao serem ditas. Comparação sem
+    /// diferenciar maiúsculas. Inclua variações fonéticas para reduzir falhas de detecção.
+    /// </summary>
+    public string[] PalavrasAtivacao { get; set; } = ["alina"];
 }

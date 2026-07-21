@@ -35,7 +35,7 @@ Alina.slnx
   src/
     Alina.Core            # Orquestrador, Models, Memory (abstrações), ITool
     Alina.Tools           # Tools: Terminal, FileRead, ClaudeCode, Git, Memory, Plugins, Background
-    Alina.Voice           # STT (Whisper), TTS, áudio via NAudio
+    Alina.Voice           # STT (Whisper), TTS, áudio via NAudio, palavra de ativação (Vosk)
     Alina.Infrastructure  # IChatClient, configuração, stores JSON
     Alina.Console         # UI de console (REPL + confirmação)
     Alina.App             # UI WPF/Blazor

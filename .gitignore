@@ -16,6 +16,9 @@ secrets.json
 appsettings.*.local.json
 data/
 
+## Modelo de voz (Vosk) — baixado à parte, não versionar (~50 MB)
+src/Alina.App/Modelos/
+
 ## SO
 Thumbs.db
 .DS_Store

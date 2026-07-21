@@ -4,6 +4,8 @@
         xmlns:blazor="clr-namespace:Microsoft.AspNetCore.Components.WebView.Wpf;assembly=Microsoft.AspNetCore.Components.WebView.Wpf"
         Title="Alina" Height="460" Width="380"
         MinHeight="380" MinWidth="340"
+        WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/Assets/alina.ico"
         Background="#171717">
     <Grid>
         <blazor:BlazorWebView x:Name="Blazor" HostPage="wwwroot\index.html" />

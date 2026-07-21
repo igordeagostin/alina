@@ -6,16 +6,18 @@
 @inject VoiceController Voz
 @inject ConversationUiState Log
 @inject UiConfirmationService Confirmacao
+@inject ConfiguracoesService Config
 @inject IJSRuntime JS
 @implements IDisposable
 
 <div class="shell @(UiState.Compacto ? "shell--compacto" : "shell--detalhado") shell--@Status.Current.ToString().ToLowerInvariant()">
     <div class="shell__header">
-        <div class="orb orb--mini"></div>
+        <img class="shell__logo" src="logo.svg" alt="Alina" />
         <div class="shell__title">Alina</div>
         <button class="modo-toggle" @onclick="AlternarModo" title="@(UiState.Compacto ? "Modo detalhado" : "Modo compacto")">
             @(UiState.Compacto ? "Detalhes" : "Compactar")
         </button>
+        <button class="config-toggle" @onclick="AbrirConfiguracoes" title="Configurações">⚙</button>
     </div>
 
     <div class="voz">
@@ -53,6 +55,67 @@
         </button>
     </div>
 
+    @if (_configAberta)
+    {
+        <div class="config">
+            <div class="config__caixa">
+                <div class="config__titulo">Configurações</div>
+
+                <label class="config__linha">
+                    <span>Iniciar com o Windows</span>
+                    <input type="checkbox" @bind="_iniciarComWindows" />
+                </label>
+
+                <label class="config__linha">
+                    <span>Abrir em modo compacto</span>
+                    <input type="checkbox" @bind="_edicao.AbrirEmModoCompacto" />
+                </label>
+
+                <label class="config__linha">
+                    <span>Falar as respostas</span>
+                    <input type="checkbox" @bind="_edicao.FalarRespostas" />
+                </label>
+
+                <label class="config__linha">
+                    <span>Atender quando eu chamar "Alina"</span>
+                    <input type="checkbox" @bind="_edicao.EscutarPalavraAtivacao" disabled="@(!Config.PalavraAtivacaoDisponivel)" />
+                </label>
+                @if (!Config.PalavraAtivacaoDisponivel)
+                {
+                    <div class="config__ajuda">
+                        <div>Para atender pelo nome, baixe o modelo pequeno de português (Vosk) e extraia de modo que os arquivos fiquem em:</div>
+                        <code class="config__ajuda-caminho">@Config.CaminhoModeloVosk</code>
+                        <div class="config__ajuda-acoes">
+                            <button class="config__link" @onclick="AbrirSiteVosk">Baixar modelo</button>
+                            <button class="config__link" @onclick="AbrirPastaModelo">Abrir pasta</button>
+                        </div>
+                    </div>
+                }
+
+                <label class="config__linha">
+                    <span>Voz da Alina</span>
+                    <select class="config__campo" @bind="_edicao.Voz">
+                        @foreach (var v in Config.VozesDisponiveis)
+                        {
+                            <option value="@v">@v</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="config__linha config__linha--range">
+                    <span>Velocidade da fala <em>@_edicao.VelocidadeFala.ToString("0.0")×</em></span>
+                    <input type="range" min="0.5" max="2" step="0.1"
+                           @bind="_edicao.VelocidadeFala" @bind:event="oninput" />
+                </label>
+
+                <div class="config__botoes">
+                    <button class="config__cancelar" @onclick="FecharConfiguracoes">Cancelar</button>
+                    <button class="config__salvar" @onclick="SalvarConfiguracoes">Salvar</button>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (_confirmacaoPendente is not null)
     {
         <div class="confirm">
@@ -76,6 +139,10 @@
     private string _input = string.Empty;
     private ConfirmationRequest? _confirmacaoPendente;
     private bool _jsPronto;
+
+    private bool _configAberta;
+    private ConfiguracoesApp _edicao = new();
+    private bool _iniciarComWindows;
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
@@ -166,6 +233,58 @@
     }
 
     private void AlternarModo() => UiState.Alternar();
+
+    private void AbrirConfiguracoes()
+    {
+        _edicao = new ConfiguracoesApp
+        {
+            AbrirEmModoCompacto = Config.Atual.AbrirEmModoCompacto,
+            FalarRespostas = Config.Atual.FalarRespostas,
+            EscutarPalavraAtivacao = Config.Atual.EscutarPalavraAtivacao,
+            Voz = Config.Atual.Voz,
+            VelocidadeFala = Config.Atual.VelocidadeFala,
+        };
+        _iniciarComWindows = Config.IniciarComWindows;
+        _configAberta = true;
+    }
+
+    private void FecharConfiguracoes() => _configAberta = false;
+
+    private void AbrirSiteVosk() => AbrirExterno(Config.UrlModelosVosk);
+
+    private void AbrirPastaModelo()
+    {
+        var pasta = System.IO.Directory.GetParent(Config.CaminhoModeloVosk)?.FullName ?? Config.CaminhoModeloVosk;
+        try
+        {
+            System.IO.Directory.CreateDirectory(pasta);
+        }
+        catch
+        {
+            // segue mesmo se não conseguir criar
+        }
+
+        AbrirExterno(pasta);
+    }
+
+    private static void AbrirExterno(string alvo)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(alvo) { UseShellExecute = true });
+        }
+        catch
+        {
+            // ignora falha ao abrir recurso externo
+        }
+    }
+
+    private void SalvarConfiguracoes()
+    {
+        Config.IniciarComWindows = _iniciarComWindows;
+        Config.Salvar(_edicao);
+        _configAberta = false;
+    }
 
     private Task AlternarEscutaAsync() => Voz.AlternarEscutaAsync();
 

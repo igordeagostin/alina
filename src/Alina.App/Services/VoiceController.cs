@@ -27,6 +27,12 @@ public sealed class VoiceController
     /// <summary>Amplitude do microfone (0–1) durante a gravação, para a waveform.</summary>
     public event Action<float>? NivelAudio;
 
+    /// <summary>Disparado ao começar a gravar a voz — usado para liberar o microfone da palavra de ativação.</summary>
+    public event Action? EscutaComecou;
+
+    /// <summary>Disparado ao encerrar um turno de voz e voltar a ficar ocioso.</summary>
+    public event Action? Concluido;
+
     public VoiceController(IServiceProvider services, IAssistantStatus status, ConversationUiState log)
     {
         _services = services;
@@ -53,6 +59,7 @@ public sealed class VoiceController
             _stt ??= _services.GetRequiredService<ISpeechToText>();
 
             _status.Set(AssistantState.Listening);
+            EscutaComecou?.Invoke();
             _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var nivel = new ProgressoSincrono(v => NivelAudio?.Invoke(v));
@@ -74,6 +81,10 @@ public sealed class VoiceController
         {
             _log.Adicionar("error", $"[erro no modo voz] {ex.Message}");
             _status.Set(AssistantState.Idle);
+        }
+        finally
+        {
+            Concluido?.Invoke();
         }
     }
 
@@ -108,7 +119,7 @@ public sealed class VoiceController
             return;
         }
 
-        if (comVoz)
+        if (comVoz && _services.GetRequiredService<VoiceOptions>().Enabled)
         {
             try
             {

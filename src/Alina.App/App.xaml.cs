@@ -30,6 +30,9 @@ public partial class App : System.Windows.Application
         _host = Composition.BuildHost();
         var services = _host.Services;
 
+        // Carrega e aplica as preferências antes de montar a janela (define o modo inicial).
+        services.GetRequiredService<ConfiguracoesService>();
+
         _window = new MainWindow(services);
 
         // Garante o HWND mesmo iniciando oculto (necessário para a hotkey global).
