@@ -55,6 +55,9 @@ public static class Composition
         // Estado de UI compartilhado (modo compacto/detalhado)
         builder.Services.AddSingleton<ShellUiState>();
 
+        // Seletor de pasta nativo (usado no botão "confiar neste projeto")
+        builder.Services.AddSingleton<SeletorPasta>();
+
         // Configurações do app (persistidas em JSON, aplicadas em runtime)
         builder.Services.AddSingleton(sp => new ConfiguracoesService(
             sp.GetRequiredService<IOptions<StorageOptions>>().Value,

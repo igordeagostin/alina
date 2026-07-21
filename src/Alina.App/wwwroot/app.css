@@ -567,6 +567,21 @@ html, body {
     flex-wrap: wrap;
 }
 
+.config__confiar {
+    margin-top: 4px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--accent-soft);
+    cursor: pointer;
+}
+
+.config__confiar:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 .config__titulo {
     font-weight: 600;
     color: var(--accent-soft);

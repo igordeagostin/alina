@@ -9,6 +9,7 @@
 @inject UiConfirmationService Confirmacao
 @inject UiConfirmacaoPermissao ConfirmacaoPermissao
 @inject IPoliticaPermissao Politica
+@inject SeletorPasta SeletorPasta
 @inject ConfiguracoesService Config
 @inject IJSRuntime JS
 @implements IDisposable
@@ -141,7 +142,20 @@
                         <input class="config__campo" @bind="_novoDiretorio" placeholder="D:\meus-projetos\alina" />
                         <button class="config__link" @onclick="AdicionarDiretorio">adicionar</button>
                     </div>
+                    <button class="config__confiar" @onclick="ConfiarNesteProjeto">📁 Confiar num projeto…</button>
                 </div>
+
+                <ListaEditavel Titulo="Comandos liberados (por prefixo)"
+                               Itens="_permOpcoes.ComandosPermitidos"
+                               Placeholder="dotnet run" />
+
+                <ListaEditavel Titulo="Comandos que sempre confirmam"
+                               Itens="_permOpcoes.ComandosSempreConfirmar"
+                               Placeholder="git push" />
+
+                <ListaEditavel Titulo="Caminhos protegidos (segredos)"
+                               Itens="_permOpcoes.CaminhosProtegidos"
+                               Placeholder=".env" />
 
                 @if (Politica.Regras.Count > 0)
                 {
@@ -327,6 +341,16 @@
     }
 
     private void RemoverDiretorio(string dir) => _permOpcoes.DiretoriosConfiaveis.Remove(dir);
+
+    private void ConfiarNesteProjeto()
+    {
+        var inicial = _permOpcoes.DiretoriosConfiaveis.LastOrDefault();
+        var pasta = SeletorPasta.Escolher(inicial);
+        if (!string.IsNullOrWhiteSpace(pasta) && !_permOpcoes.DiretoriosConfiaveis.Contains(pasta))
+        {
+            _permOpcoes.DiretoriosConfiaveis.Add(pasta);
+        }
+    }
 
     private void RemoverRegra(string id) => Politica.RemoverRegra(id);
 

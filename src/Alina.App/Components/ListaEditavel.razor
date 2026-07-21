@@ -1,0 +1,36 @@
+@* Lista de textos editável: mostra os itens com "remover" e um campo para adicionar. *@
+
+<div class="config__grupo">
+    <span class="config__grupo-titulo">@Titulo</span>
+    @foreach (var item in Itens.ToList())
+    {
+        <div class="config__item">
+            <code class="config__item-texto">@item</code>
+            <button class="config__link" @onclick="() => Remover(item)">remover</button>
+        </div>
+    }
+    <div class="config__item">
+        <input class="config__campo" @bind="_novo" placeholder="@Placeholder" />
+        <button class="config__link" @onclick="Adicionar">adicionar</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = string.Empty;
+    [Parameter] public List<string> Itens { get; set; } = new();
+    [Parameter] public string Placeholder { get; set; } = string.Empty;
+
+    private string _novo = string.Empty;
+
+    private void Adicionar()
+    {
+        var valor = _novo.Trim();
+        if (valor.Length > 0 && !Itens.Contains(valor))
+        {
+            Itens.Add(valor);
+        }
+        _novo = string.Empty;
+    }
+
+    private void Remover(string item) => Itens.Remove(item);
+}
