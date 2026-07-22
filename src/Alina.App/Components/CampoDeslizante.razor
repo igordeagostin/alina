@@ -1,0 +1,80 @@
+@* Ajuste numérico com barra deslizante e caixa de texto para digitar o valor exato. *@
+
+@using System.Globalization
+
+<div class="cfg-row cfg-row--empilhado">
+    <div class="cfg-row-cabecalho">
+        <span class="cfg-row-titulo">@Titulo</span>
+        <div class="cfg-valor-editavel">
+            <input type="number" class="cfg-valor-campo" step="any" @key="_versaoCampo"
+                   min="@Formatar(Minimo)" max="@Formatar(Maximo)"
+                   value="@Formatar(ValorExibido)"
+                   @onchange="AoDigitarAsync" />
+            @if (!string.IsNullOrEmpty(Sufixo))
+            {
+                <span class="cfg-valor-sufixo">@Sufixo</span>
+            }
+        </div>
+    </div>
+    <input type="range" class="cfg-range"
+           min="@Formatar(Minimo)" max="@Formatar(Maximo)" step="@Formatar(Passo)"
+           value="@Formatar(ValorExibido)"
+           @oninput="AoArrastarAsync" />
+    @if (!string.IsNullOrWhiteSpace(Descricao))
+    {
+        <span class="cfg-row-sub">@Descricao</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Titulo { get; set; } = string.Empty;
+    [Parameter] public string? Descricao { get; set; }
+    [Parameter] public string Sufixo { get; set; } = string.Empty;
+    [Parameter] public double Minimo { get; set; }
+    [Parameter] public double Maximo { get; set; } = 1;
+    [Parameter] public double Passo { get; set; } = 0.1;
+    [Parameter] public int Casas { get; set; }
+    [Parameter] public double Fator { get; set; } = 1;
+    [Parameter] public double Valor { get; set; }
+    [Parameter] public EventCallback<double> ValorChanged { get; set; }
+
+    private int _versaoCampo;
+
+    private double ValorExibido => Math.Round(Valor * Fator, Casas);
+
+    private string Formatar(double valor) => valor.ToString(CultureInfo.InvariantCulture);
+
+    private Task AoArrastarAsync(ChangeEventArgs e) => AplicarAsync(e.Value, false);
+
+    private Task AoDigitarAsync(ChangeEventArgs e) => AplicarAsync(e.Value, true);
+
+    private async Task AplicarAsync(object? bruto, bool digitado)
+    {
+        string texto = (Convert.ToString(bruto) ?? string.Empty).Trim().Replace(',', '.');
+
+        if (!double.TryParse(texto, NumberStyles.Any, CultureInfo.InvariantCulture, out double exibido))
+        {
+            if (digitado)
+            {
+                _versaoCampo++;
+            }
+            return;
+        }
+
+        double ajustado = Math.Clamp(Math.Round(exibido, Casas), Minimo, Maximo);
+
+        if (digitado && Math.Abs(ajustado - exibido) > 1e-9)
+        {
+            _versaoCampo++;
+        }
+
+        double novo = ajustado / Fator;
+        if (Math.Abs(novo - Valor) < 1e-9)
+        {
+            return;
+        }
+
+        Valor = novo;
+        await ValorChanged.InvokeAsync(novo);
+    }
+}

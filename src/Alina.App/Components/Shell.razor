@@ -1,4 +1,3 @@
-@using System.Globalization
 @using System.Text.Json
 @using Alina.App.Services
 @using Alina.Core.Ferramentas
@@ -133,16 +132,11 @@
                 @if (_aba == AbaConfig.Aparencia)
                 {
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row-cabecalho">
-                                <span class="cfg-row-titulo">Tamanho do texto</span>
-                                <span class="cfg-row-valor">@((_edicao.EscalaInterface * 100).ToString("0"))%</span>
-                            </div>
-                            <input type="range" class="cfg-range" min="0.8" max="1.4" step="0.05"
-                                   value="@_edicao.EscalaInterface.ToString(CultureInfo.InvariantCulture)"
-                                   @oninput="AoMudarEscalaAsync" />
-                            <span class="cfg-row-sub">Aumenta ou diminui o texto de toda a interface. Ajuste conforme a sua distância da tela — a mudança aparece na hora.</span>
-                        </div>
+                        <CampoDeslizante Titulo="Tamanho do texto"
+                                         Descricao="Aumenta ou diminui o texto de toda a interface. Ajuste conforme a sua distância da tela — a mudança aparece na hora."
+                                         Sufixo="%" Minimo="80" Maximo="140" Passo="5" Casas="0" Fator="100"
+                                         Valor="_edicao.EscalaInterface"
+                                         ValorChanged="AoMudarEscalaAsync" />
                     </div>
                 }
 
@@ -230,26 +224,18 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row-cabecalho">
-                                <span class="cfg-row-titulo">Velocidade da fala</span>
-                                <span class="cfg-row-valor">@_edicao.VelocidadeFala.ToString("0.0")×</span>
-                            </div>
-                            <input type="range" class="cfg-range" min="0.5" max="2" step="0.1"
-                                   @bind="_edicao.VelocidadeFala" @bind:event="oninput" @bind:culture="CultureInfo.InvariantCulture" />
-                        </div>
+                        <CampoDeslizante Titulo="Velocidade da fala"
+                                         Sufixo="×" Minimo="0.5" Maximo="2" Passo="0.1" Casas="2"
+                                         Valor="_edicao.VelocidadeFala"
+                                         ValorChanged="(double v) => _edicao.VelocidadeFala = v" />
                     </div>
 
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row-cabecalho">
-                                <span class="cfg-row-titulo">Encerrar após silêncio</span>
-                                <span class="cfg-row-valor">@_edicao.SegundosSilencioParaEncerrar.ToString("0.0")s</span>
-                            </div>
-                            <input type="range" class="cfg-range" min="0.8" max="3" step="0.1"
-                                   @bind="_edicao.SegundosSilencioParaEncerrar" @bind:event="oninput" @bind:culture="CultureInfo.InvariantCulture" />
-                            <span class="cfg-row-sub">Quando você para de falar, a Alina processa sozinha após esse tempo de silêncio</span>
-                        </div>
+                        <CampoDeslizante Titulo="Encerrar após silêncio"
+                                         Descricao="Quando você para de falar, a Alina processa sozinha após esse tempo de silêncio"
+                                         Sufixo="s" Minimo="0.8" Maximo="3" Passo="0.1" Casas="2"
+                                         Valor="_edicao.SegundosSilencioParaEncerrar"
+                                         ValorChanged="(double v) => _edicao.SegundosSilencioParaEncerrar = v" />
                     </div>
 
                     <div class="cfg-card">
@@ -260,15 +246,11 @@
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.ConversaContinua" />
                         </label>
-                        <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row-cabecalho">
-                                <span class="cfg-row-titulo">Janela da conversa</span>
-                                <span class="cfg-row-valor">@_edicao.SegundosJanelaConversa.ToString("0")s</span>
-                            </div>
-                            <input type="range" class="cfg-range" min="5" max="30" step="1"
-                                   @bind="_edicao.SegundosJanelaConversa" @bind:event="oninput" />
-                            <span class="cfg-row-sub">Quanto tempo ela segue ouvindo antes de dormir e voltar a exigir o nome</span>
-                        </div>
+                        <CampoDeslizante Titulo="Janela da conversa"
+                                         Descricao="Quanto tempo ela segue ouvindo antes de dormir e voltar a exigir o nome"
+                                         Sufixo="s" Minimo="5" Maximo="30" Passo="1" Casas="0"
+                                         Valor="_edicao.SegundosJanelaConversa"
+                                         ValorChanged="(double v) => _edicao.SegundosJanelaConversa = v" />
                     </div>
                 }
 
@@ -1188,13 +1170,10 @@
         _configAberta = false;
     }
 
-    private async Task AoMudarEscalaAsync(ChangeEventArgs e)
+    private async Task AoMudarEscalaAsync(double escala)
     {
-        if (double.TryParse(Convert.ToString(e.Value), NumberStyles.Any, CultureInfo.InvariantCulture, out double escala))
-        {
-            _edicao.EscalaInterface = escala;
-            await AplicarEscalaAsync(escala);
-        }
+        _edicao.EscalaInterface = escala;
+        await AplicarEscalaAsync(escala);
     }
 
     private async Task AplicarEscalaAsync(double escala)

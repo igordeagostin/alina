@@ -735,6 +735,48 @@ html, body {
     font-size: 0.75rem;
 }
 
+.cfg-valor-editavel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.cfg-valor-editavel:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow-soft);
+}
+
+.cfg-valor-campo {
+    width: 3.5rem;
+    border: none;
+    background: transparent;
+    outline: none;
+    color: var(--accent-soft);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.cfg-valor-campo::-webkit-outer-spin-button,
+.cfg-valor-campo::-webkit-inner-spin-button {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.cfg-valor-sufixo {
+    color: var(--accent-soft);
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
 /* Interruptor */
 .cfg-switch {
     appearance: none;
