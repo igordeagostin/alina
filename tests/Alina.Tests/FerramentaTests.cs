@@ -234,3 +234,74 @@ public sealed class FerramentaProviderTests : IDisposable
         }
     }
 }
+
+public sealed class GeradorFerramentaTests
+{
+    private static IReadOnlyList<ChatMessage> Historico(string texto)
+        => new[] { new ChatMessage(ChatRole.User, texto) };
+
+    private static DefinicaoFerramenta Existente() => new DefinicaoFerramenta
+    {
+        Nome = "deploy_diario",
+        Descricao = "Publica o Diário",
+        Comando = "powershell",
+        Argumentos = ["-NoProfile", "-Command", "deploy.ps1"],
+    };
+
+    [Fact]
+    public async Task ContinuarAsync_em_edicao_injeta_a_definicao_atual()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) =>
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+        GeradorFerramenta gerador = new GeradorFerramenta(client);
+
+        await gerador.ContinuarAsync(Historico("passa a rodar em homologação"), new ContextoFerramenta(Existente()));
+
+        string contexto = string.Concat(
+            client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
+        Assert.Contains("editar uma \"ferramenta\" que já existe", contexto);
+        Assert.Contains("deploy_diario", contexto);
+        Assert.Contains("deploy.ps1", contexto);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_sem_contexto_trata_como_criacao()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) =>
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+        GeradorFerramenta gerador = new GeradorFerramenta(client);
+
+        await gerador.ContinuarAsync(Historico("quero automatizar o deploy"));
+
+        string contexto = string.Concat(
+            client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
+        Assert.Contains("criar uma nova \"ferramenta\"", contexto);
+        Assert.DoesNotContain("Ferramenta atual", contexto);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_com_pronto_retorna_definicao_completa()
+    {
+        string json = """
+            {
+              "mensagem": "Montei a ferramenta.",
+              "pronto": true,
+              "nome": "abrir_terminal",
+              "descricao": "Abre o terminal numa pasta",
+              "comando": "wt",
+              "argumentos": ["-d", "{pasta}"],
+              "exigeConfirmacao": false,
+              "parametros": [{ "nome": "pasta", "descricao": "pasta alvo", "obrigatorio": true, "tipo": "Diretorio" }]
+            }
+            """;
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
+        GeradorFerramenta gerador = new GeradorFerramenta(client);
+
+        RespostaGeracaoFerramenta resposta = await gerador.ContinuarAsync(Historico("abre o terminal numa pasta"));
+
+        Assert.NotNull(resposta.Rascunho);
+        Assert.Equal("abrir_terminal", resposta.Rascunho!.Definicao.Nome);
+        Assert.False(resposta.Rascunho.Definicao.ExigeConfirmacao);
+        Assert.Equal(TipoParametroFerramenta.Diretorio, resposta.Rascunho.Definicao.Parametros[0].Tipo);
+    }
+}

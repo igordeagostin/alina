@@ -40,6 +40,12 @@ public interface IDetectorPalavraAtivacao : IDisposable
     /// <summary>Disparado quando a palavra de ativação é reconhecida.</summary>
     event Action? PalavraDetectada;
 
+    /// <summary>
+    /// Disparado quando uma palavra de interrupção ("espera", "chega") é reconhecida.
+    /// Só faz sentido enquanto a Alina pensa ou fala; quem assina decide o que fazer.
+    /// </summary>
+    event Action? InterrupcaoDetectada;
+
     /// <summary>Disparado quando a escuta falha e é interrompida (ex.: microfone indisponível).</summary>
     event Action<Exception>? Falhou;
 

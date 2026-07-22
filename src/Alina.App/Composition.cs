@@ -61,13 +61,16 @@ public static class Composition
         builder.Services.AddOptions<LlmOptions>()
             .PostConfigure<ConfiguracoesLlmService>((opcoes, cfg) => cfg.AplicarEm(opcoes));
 
-        // Cliente de chat reconfigurável: permite trocar modelo/chave em runtime pela
-        // tela de configurações. Substitui o IChatClient registrado por AddAlina.
-        builder.Services.AddSingleton<ReconfigurableChatClient>(sp =>
-            new ReconfigurableChatClient(
-                sp.GetRequiredService<IOptions<LlmOptions>>().Value,
+        // Um cliente de chat por papel (conversa, habilidades, ferramentas), reconfigurável
+        // em runtime pela tela de configurações. Substitui o IChatClient de AddAlina, que
+        // passa a ser o papel de conversa.
+        builder.Services.AddSingleton<RegistroClientesLlm>(sp =>
+            new RegistroClientesLlm(
+                sp.GetRequiredService<ConfiguracoesLlmService>(),
+                sp.GetRequiredService<ClaudeCodeOptions>(),
                 sp.GetRequiredService<ILoggerFactory>()));
-        builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ReconfigurableChatClient>());
+        builder.Services.AddSingleton<IChatClient>(sp =>
+            sp.GetRequiredService<RegistroClientesLlm>().Obter(PapelLlm.Conversa));
 
         // Serviços do BlazorWebView (WPF)
         builder.Services.AddWpfBlazorWebView();
@@ -91,11 +94,15 @@ public static class Composition
             sp.GetRequiredService<IOptions<StorageOptions>>().Value,
             sp.GetRequiredService<VoiceOptions>(),
             sp.GetRequiredService<ShellUiState>(),
-            sp.GetRequiredService<GerenciadorPalavraAtivacao>()));
+            sp.GetRequiredService<GerenciadorPalavraAtivacao>(),
+            sp.GetRequiredService<MiniPlayerController>()));
 
         // Log de conversa observável + controlador de voz (clique no orbe e hotkey global)
         builder.Services.AddSingleton<ConversationUiState>();
         builder.Services.AddSingleton<VoiceController>();
+
+        // Mini player flutuante: sinaliza o diálogo em andamento com a janela oculta
+        builder.Services.AddSingleton<MiniPlayerController>();
 
         // Palavra de ativação ("Alina") — detecção local via Vosk + coordenação com o fluxo de voz
         builder.Services.AddSingleton<IDetectorPalavraAtivacao, VoskDetectorPalavra>();
@@ -155,7 +162,7 @@ public static class Composition
         builder.Services.AddSingleton<ITool, EsquecerHabilidadeTool>();
         builder.Services.AddSingleton<IGeradorHabilidade>(sp =>
             new GeradorHabilidade(
-                sp.GetRequiredService<IChatClient>(),
+                sp.GetRequiredService<RegistroClientesLlm>().Obter(PapelLlm.Habilidades),
                 sp.GetRequiredService<IPoliticaPermissao>()));
 
         // Ferramentas declarativas: tools de criar/esquecer + gerador conversacional.
@@ -164,7 +171,7 @@ public static class Composition
         builder.Services.AddSingleton<ITool, EsquecerFerramentaTool>();
         builder.Services.AddSingleton<IGeradorFerramenta>(sp =>
             new GeradorFerramenta(
-                sp.GetRequiredService<IChatClient>(),
+                sp.GetRequiredService<RegistroClientesLlm>().Obter(PapelLlm.Ferramentas),
                 sp.GetRequiredService<IPoliticaPermissao>()));
 
         // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
@@ -179,8 +186,10 @@ public static class Composition
         builder.Services.AddSingleton<IAudioPlayer, NAudioPlayer>();
         builder.Services.AddSingleton(sp =>
         {
-            LlmOptions llm = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-            string? key = string.IsNullOrWhiteSpace(voiceOptions.ApiKey) ? llm.ApiKey : voiceOptions.ApiKey;
+            // A voz é sempre da OpenAI, mesmo que o cérebro esteja em outro provedor.
+            string? key = string.IsNullOrWhiteSpace(voiceOptions.ApiKey)
+                ? sp.GetRequiredService<ConfiguracoesLlmService>().ChaveOpenAi()
+                : voiceOptions.ApiKey;
             if (string.IsNullOrWhiteSpace(key))
             {
                 throw new InvalidOperationException("Chave da OpenAI não configurada para voz (Voice:ApiKey ou Llm:ApiKey).");

@@ -1,0 +1,111 @@
+<Window x:Class="Alina.App.MiniPlayer"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Alina"
+        Width="340" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize"
+        AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" ShowActivated="False" Topmost="True"
+        Opacity="0" Visibility="Collapsed">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="Accent" Color="#DFA53A" />
+        <SolidColorBrush x:Key="AccentBright" Color="#F2C965" />
+        <SolidColorBrush x:Key="Texto" Color="#F7F7F2" />
+        <SolidColorBrush x:Key="Suave" Color="#9A9A92" />
+
+        <Style x:Key="BotaoIcone" TargetType="Button">
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Foreground" Value="{StaticResource Suave}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Fundo" Background="Transparent" CornerRadius="13">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fundo" Property="Background" Value="#33DFA53A" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBright}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Storyboard x:Key="PulsoAura" RepeatBehavior="Forever" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="Aura" Storyboard.TargetProperty="Opacity"
+                             From="0.5" To="0.08" Duration="0:0:1.3" />
+            <DoubleAnimation Storyboard.TargetName="AuraEscala" Storyboard.TargetProperty="ScaleX"
+                             From="0.85" To="1.4" Duration="0:0:1.3" />
+            <DoubleAnimation Storyboard.TargetName="AuraEscala" Storyboard.TargetProperty="ScaleY"
+                             From="0.85" To="1.4" Duration="0:0:1.3" />
+        </Storyboard>
+    </Window.Resources>
+
+    <Border Margin="14" CornerRadius="16" Background="#F51F1F1F" BorderBrush="#3A3A3A" BorderThickness="1"
+            MouseLeftButtonUp="AoClicarNoCorpo" Cursor="Hand">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Color="#000000" Opacity="0.55" />
+        </Border.Effect>
+
+        <Grid Margin="14,12,10,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Width="34" Height="34" VerticalAlignment="Top">
+                <Ellipse x:Name="Aura" Fill="{StaticResource Accent}" Opacity="0.18"
+                         RenderTransformOrigin="0.5,0.5">
+                    <Ellipse.RenderTransform>
+                        <ScaleTransform x:Name="AuraEscala" ScaleX="1" ScaleY="1" />
+                    </Ellipse.RenderTransform>
+                </Ellipse>
+                <Ellipse Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#F2C965" Offset="0" />
+                            <GradientStop Color="#C48F2E" Offset="1" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+            </Grid>
+
+            <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                <TextBlock x:Name="Estado" Text="ouvindo…" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{StaticResource Accent}" />
+                <TextBlock x:Name="Fala" Margin="0,3,0,0" FontSize="12" Foreground="{StaticResource Suave}"
+                           TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis"
+                           Visibility="Collapsed" />
+                <StackPanel x:Name="Barras" Orientation="Horizontal" Height="14" Margin="0,6,0,0"
+                            VerticalAlignment="Bottom">
+                    <Rectangle Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Margin="0,0,3,0"
+                               VerticalAlignment="Bottom" Fill="{StaticResource Accent}" />
+                    <Rectangle Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Margin="0,0,3,0"
+                               VerticalAlignment="Bottom" Fill="{StaticResource Accent}" />
+                    <Rectangle Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Margin="0,0,3,0"
+                               VerticalAlignment="Bottom" Fill="{StaticResource Accent}" />
+                    <Rectangle Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Margin="0,0,3,0"
+                               VerticalAlignment="Bottom" Fill="{StaticResource Accent}" />
+                    <Rectangle Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Margin="0,0,3,0"
+                               VerticalAlignment="Bottom" Fill="{StaticResource Accent}" />
+                    <Rectangle Width="3" Height="3" RadiusX="1.5" RadiusY="1.5"
+                               VerticalAlignment="Bottom" Fill="{StaticResource Accent}" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button x:Name="BotaoMicrofone" Style="{StaticResource BotaoIcone}" Content="⏹"
+                        ToolTip="Encerrar a fala e processar" Click="AoClicarMicrofone" />
+                <Button Style="{StaticResource BotaoIcone}" Content="✕"
+                        ToolTip="Ocultar" Click="AoClicarFechar" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

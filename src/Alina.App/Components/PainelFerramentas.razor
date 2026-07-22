@@ -1,0 +1,403 @@
+@* Catálogo de ferramentas: lista com busca e, em cima dela, um painel por vez —
+   visualizar o JSON, editar com a Alina ou editar o JSON à mão. *@
+
+@using System.Text.Json
+@using Alina.Core.Ferramentas
+@using Microsoft.Extensions.AI
+@inject IFerramentaStore Ferramentas
+@inject IGeradorFerramenta Gerador
+
+@if (_modo == Modo.Lista)
+{
+    <div class="cfg-card">
+        <div class="cfg-row cfg-row-empilhado">
+            <span class="cfg-row-titulo">Ferramentas da Alina</span>
+            <span class="cfg-row-sub">Cada ferramenta é um comando que a Alina pode executar diretamente, definido em JSON — sem novo build. Desligar a confirmação é o que dispensa o SIM/NÃO; use com cuidado. Alterações valem no próximo turno.</span>
+        </div>
+    </div>
+
+    <div class="cat">
+        <div class="cat-barra">
+            <input class="cat-busca" @bind="_busca" @bind:event="oninput" placeholder="Buscar ferramenta…" />
+            <span class="cat-contador">@Filtradas.Count de @_itens.Count</span>
+            <button class="cat-novo" @onclick="IniciarCriacao">＋ Nova</button>
+        </div>
+
+        <div class="cat-lista">
+            @if (_itens.Count == 0)
+            {
+                <span class="cat-vazio">Nenhuma ferramenta ainda. Peça à Alina para criar uma, ou crie aqui.</span>
+            }
+            else if (Filtradas.Count == 0)
+            {
+                <span class="cat-vazio">Nada encontrado para "@_busca".</span>
+            }
+
+            @foreach (FerramentaResumo f in Filtradas)
+            {
+                @if (_confirmandoRemocao == f.Nome)
+                {
+                    <div class="cat-item cat-item-perigo">
+                        <span class="cat-item-aviso">Remover "@f.Nome" de vez?</span>
+                        <div class="cat-item-acoes">
+                            <button class="config-link" @onclick="() => _confirmandoRemocao = null">cancelar</button>
+                            <button class="config-link cat-link-perigo" @onclick="() => RemoverAsync(f.Nome)">remover</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="cat-item">
+                        <button class="cat-item-principal" @onclick="() => AbrirDetalheAsync(f.Nome)">
+                            <span class="cat-item-nome">@f.Nome</span>
+                            <span class="cat-item-descricao">@(string.IsNullOrWhiteSpace(f.Descricao) ? "sem descrição" : f.Descricao)</span>
+                        </button>
+                        <div class="cat-item-acoes">
+                            <button class="cat-selo @(f.ExigeConfirmacao ? string.Empty : "cat-selo-direto")"
+                                    title="@(f.ExigeConfirmacao ? "Pede confirmação ao executar" : "Roda sem confirmação")"
+                                    @onclick="() => AlternarConfirmacaoAsync(f.Nome)">
+                                @(f.ExigeConfirmacao ? "🔒" : "⚡")
+                            </button>
+                            <button class="cat-acao" title="Conversar com a Alina para ajustar" @onclick="() => ConversarAsync(f.Nome)">✦</button>
+                            <button class="cat-acao" title="Editar o JSON" @onclick="() => EditarJsonAsync(f.Nome)">✎</button>
+                            <button class="cat-acao cat-acao-perigo" title="Remover" @onclick="() => _confirmandoRemocao = f.Nome">🗑</button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div class="cat-painel">
+        <div class="cat-topo">
+            <button class="cat-voltar" @onclick="VoltarAsync" title="Voltar à lista">←</button>
+            <div class="cat-topo-texto">
+                <span class="cat-topo-titulo">@TituloPainel</span>
+                <span class="cat-topo-sub">@SubtituloPainel</span>
+            </div>
+        </div>
+
+        @if (_modo == Modo.Detalhe && _selecionada is not null)
+        {
+            <div class="cat-acoes">
+                <button class="config-link" @onclick="() => ConversarAsync(_selecionada.Nome)">✦ ajustar com a Alina</button>
+                <button class="config-link" @onclick="() => EditarJsonAsync(_selecionada.Nome)">✎ editar JSON</button>
+            </div>
+            <pre class="cfg-textarea cat-json">@Serializar(_selecionada)</pre>
+        }
+
+        @if (_modo == Modo.Chat)
+        {
+            <ChatGeracao Historico="_historico" Gerando="_gerando" Enviar="EnviarAsync" Dica="@DicaChat">
+                <Rascunho>
+                    @if (_rascunho is not null)
+                    {
+                        <CartaoRascunho Titulo="@RotuloRascunho" Descricao="@_rascunho.Definicao.Descricao"
+                                        RotuloAplicar="@RotuloAplicar" Revisar="RevisarRascunho" Aplicar="AplicarRascunhoAsync">
+                            <pre class="cfg-textarea cat-json">@Serializar(_rascunho.Definicao)</pre>
+                        </CartaoRascunho>
+                    }
+                </Rascunho>
+                <Acoes>
+                    <button class="config-link" @onclick="PreencherManualmente">preencher manualmente</button>
+                    <button class="cfg-cancelar" @onclick="VoltarAsync">Cancelar</button>
+                </Acoes>
+            </ChatGeracao>
+        }
+
+        @if (_modo == Modo.Editor)
+        {
+            <span class="cfg-row-sub">Defina a ferramenta em JSON: nome, descricao, comando, argumentos (com {'{'}placeholders{'}'}), exigeConfirmacao e parametros.</span>
+            <textarea class="cfg-textarea cat-json" @bind="_json" rows="14" placeholder="JSON da ferramenta…"></textarea>
+            @if (!string.IsNullOrEmpty(_erro))
+            {
+                <span class="cat-erro">@_erro</span>
+            }
+            <div class="cat-acoes">
+                <button class="cfg-cancelar" @onclick="VoltarAsync">Cancelar</button>
+                <button class="cfg-salvar" @onclick="SalvarEditorAsync" disabled="@string.IsNullOrWhiteSpace(_json)">
+                    Salvar ferramenta
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private enum Modo { Lista, Detalhe, Chat, Editor }
+
+    private static readonly JsonSerializerOptions OpcoesJson = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    private List<FerramentaResumo> _itens = new();
+    private Modo _modo = Modo.Lista;
+    private string _busca = string.Empty;
+    private string? _confirmandoRemocao;
+    private DefinicaoFerramenta? _selecionada;
+
+    private readonly List<ChatMessage> _historico = new();
+    private ContextoFerramenta? _contexto;
+    private RascunhoFerramenta? _rascunho;
+    private bool _gerando;
+
+    private bool _ehNova;
+    private string _nomeOriginal = string.Empty;
+    private string _json = string.Empty;
+    private string _erro = string.Empty;
+
+    private List<FerramentaResumo> Filtradas
+    {
+        get
+        {
+            string termo = _busca.Trim();
+            if (termo.Length == 0)
+            {
+                return _itens;
+            }
+
+            return _itens
+                .Where(f => f.Nome.Contains(termo, StringComparison.OrdinalIgnoreCase)
+                    || f.Descricao.Contains(termo, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private string TituloPainel => _modo switch
+    {
+        Modo.Detalhe => _selecionada?.Nome ?? string.Empty,
+        Modo.Chat when _contexto is not null => $"Ajustando: {_contexto.Atual.Nome}",
+        Modo.Chat => "Nova ferramenta",
+        Modo.Editor when _ehNova => "Nova ferramenta",
+        _ => $"Editando: {_nomeOriginal}",
+    };
+
+    private string SubtituloPainel => _modo switch
+    {
+        Modo.Detalhe => _selecionada?.Descricao ?? string.Empty,
+        Modo.Chat when _contexto is not null => "a Alina já conhece a definição atual",
+        Modo.Chat => "converse com a Alina até o comando ficar certo",
+        _ => "edição direta do JSON",
+    };
+
+    private string DicaChat => _contexto is null
+        ? "Descreva a ação que você quer automatizar — por exemplo, \"abrir o terminal na pasta de um projeto\" ou \"rodar o deploy do Diário\". A Alina pergunta o que faltar e monta o comando."
+        : "Diga o que mudar — por exemplo, \"passa a rodar em homologação\" ou \"acrescenta um parâmetro de branch\".";
+
+    private string RotuloRascunho => _contexto is null
+        ? $"Rascunho: {_rascunho?.Definicao.Nome}"
+        : $"Nova versão: {_rascunho?.Definicao.Nome}";
+
+    private string RotuloAplicar => _contexto is null ? "Salvar ferramenta" : "Salvar nova versão";
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync() => _itens = (await Ferramentas.ListarAsync()).ToList();
+
+    private static string Serializar(DefinicaoFerramenta definicao) => JsonSerializer.Serialize(definicao, OpcoesJson);
+
+    private async Task AbrirDetalheAsync(string nome)
+    {
+        _selecionada = await Ferramentas.ObterAsync(nome);
+        if (_selecionada is null)
+        {
+            await CarregarAsync();
+            return;
+        }
+
+        _confirmandoRemocao = null;
+        _modo = Modo.Detalhe;
+    }
+
+    private void IniciarCriacao()
+    {
+        LimparConversa();
+        _contexto = null;
+        _selecionada = null;
+        _modo = Modo.Chat;
+    }
+
+    private async Task ConversarAsync(string nome)
+    {
+        DefinicaoFerramenta? definicao = await Ferramentas.ObterAsync(nome);
+        if (definicao is null)
+        {
+            await VoltarAsync();
+            return;
+        }
+
+        LimparConversa();
+        _selecionada = definicao;
+        _contexto = new ContextoFerramenta(definicao);
+        _modo = Modo.Chat;
+    }
+
+    private async Task EditarJsonAsync(string nome)
+    {
+        DefinicaoFerramenta? definicao = await Ferramentas.ObterAsync(nome);
+        if (definicao is null)
+        {
+            await VoltarAsync();
+            return;
+        }
+
+        _selecionada = definicao;
+        _ehNova = false;
+        _nomeOriginal = definicao.Nome;
+        _json = Serializar(definicao);
+        _erro = string.Empty;
+        _modo = Modo.Editor;
+    }
+
+    private void PreencherManualmente()
+    {
+        _ehNova = _contexto is null;
+        _nomeOriginal = _contexto?.Atual.Nome ?? string.Empty;
+        _json = Serializar(_rascunho?.Definicao ?? _contexto?.Atual ?? Modelo());
+        _erro = string.Empty;
+        _modo = Modo.Editor;
+    }
+
+    private void RevisarRascunho() => PreencherManualmente();
+
+    private static DefinicaoFerramenta Modelo() => new DefinicaoFerramenta
+    {
+        Nome = "minha_ferramenta",
+        Descricao = "O que a ferramenta faz.",
+        ExigeConfirmacao = true,
+        Comando = "powershell",
+        Argumentos = ["-NoProfile", "-Command", "Write-Output '{texto}'"],
+        Parametros =
+        [
+            new ParametroFerramenta { Nome = "texto", Descricao = "Texto a exibir.", Obrigatorio = true },
+        ],
+    };
+
+    private void LimparConversa()
+    {
+        _historico.Clear();
+        _rascunho = null;
+        _gerando = false;
+        _confirmandoRemocao = null;
+    }
+
+    private async Task EnviarAsync(string texto)
+    {
+        if (_gerando)
+        {
+            return;
+        }
+
+        _historico.Add(new ChatMessage(ChatRole.User, texto));
+        _gerando = true;
+        try
+        {
+            RespostaGeracaoFerramenta resposta = await Gerador.ContinuarAsync(_historico, _contexto);
+            _historico.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
+            _rascunho = resposta.Rascunho;
+        }
+        catch (Exception ex)
+        {
+            _historico.Add(new ChatMessage(ChatRole.Assistant, $"[erro] {ex.Message}"));
+        }
+        finally
+        {
+            _gerando = false;
+        }
+    }
+
+    private async Task AplicarRascunhoAsync()
+    {
+        if (_rascunho is null)
+        {
+            return;
+        }
+
+        DefinicaoFerramenta nova = _rascunho.Definicao;
+        await GravarAsync(nova, _contexto?.Atual.Nome);
+
+        _rascunho = null;
+        _selecionada = nova;
+        _contexto = null;
+        _modo = Modo.Detalhe;
+    }
+
+    private async Task SalvarEditorAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_json))
+        {
+            return;
+        }
+
+        DefinicaoFerramenta? definicao;
+        try
+        {
+            definicao = JsonSerializer.Deserialize<DefinicaoFerramenta>(_json, OpcoesJson);
+        }
+        catch (JsonException ex)
+        {
+            _erro = $"JSON inválido: {ex.Message}";
+            return;
+        }
+
+        if (definicao is null || string.IsNullOrWhiteSpace(definicao.Nome) || string.IsNullOrWhiteSpace(definicao.Comando))
+        {
+            _erro = "Informe ao menos 'nome' e 'comando'.";
+            return;
+        }
+
+        await GravarAsync(definicao, _ehNova ? null : _nomeOriginal);
+        _erro = string.Empty;
+        _selecionada = definicao;
+        _contexto = null;
+        _modo = Modo.Detalhe;
+    }
+
+    private async Task GravarAsync(DefinicaoFerramenta definicao, string? nomeAnterior)
+    {
+        await Ferramentas.SalvarAsync(definicao);
+
+        if (!string.IsNullOrEmpty(nomeAnterior)
+            && !string.Equals(nomeAnterior, definicao.Nome, StringComparison.OrdinalIgnoreCase))
+        {
+            await Ferramentas.RemoverAsync(nomeAnterior);
+        }
+
+        await CarregarAsync();
+    }
+
+    private async Task AlternarConfirmacaoAsync(string nome)
+    {
+        DefinicaoFerramenta? definicao = await Ferramentas.ObterAsync(nome);
+        if (definicao is null)
+        {
+            await CarregarAsync();
+            return;
+        }
+
+        definicao.ExigeConfirmacao = !definicao.ExigeConfirmacao;
+        await Ferramentas.SalvarAsync(definicao);
+        await CarregarAsync();
+    }
+
+    private async Task RemoverAsync(string nome)
+    {
+        await Ferramentas.RemoverAsync(nome);
+        _confirmandoRemocao = null;
+        await CarregarAsync();
+    }
+
+    private async Task VoltarAsync()
+    {
+        LimparConversa();
+        _contexto = null;
+        _selecionada = null;
+        _modo = Modo.Lista;
+        await CarregarAsync();
+    }
+}

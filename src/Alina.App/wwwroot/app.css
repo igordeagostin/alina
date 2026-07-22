@@ -392,6 +392,22 @@ html, body {
     font-style: italic;
 }
 
+/* Execuções do treino de habilidades: nem fala sua, nem resposta no chat. */
+.msg-teste,
+.msg-resultado {
+    align-self: stretch;
+    max-width: 100%;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.msg-teste {
+    color: var(--accent-soft);
+    border-color: var(--accent-strong);
+}
+
 /* ---- Composer de texto (modo alternativo) ---- */
 .shell-composer {
     display: flex;
@@ -445,7 +461,9 @@ html, body {
     padding: 20px;
     background: rgba(23, 23, 23, 0.72);
     backdrop-filter: blur(3px);
-    z-index: 900;
+    /* Acima do painel de configurações: o treino de habilidades executa de verdade
+       com as configurações abertas, e o SIM/NÃO precisa aparecer. */
+    z-index: 960;
 }
 
 .confirm-caixa {
@@ -894,6 +912,28 @@ html, body {
     cursor: default;
 }
 
+.cfg-acao {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 13px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--accent-soft);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.cfg-acao:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.cfg-acao:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
 .cfg-range {
     width: 100%;
     accent-color: var(--accent);
@@ -944,25 +984,6 @@ html, body {
     word-break: break-all;
     color: var(--muted);
     font-size: 0.6875rem;
-}
-
-.config-item-empilhado {
-    align-items: flex-start;
-    row-gap: 10px;
-}
-
-.config-item-empilhado .config-item-texto {
-    flex: 1 1 100%;
-    word-break: normal;
-    overflow-wrap: anywhere;
-}
-
-.config-item-botoes {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 6px;
-    width: 100%;
 }
 
 .config-confiar {
@@ -1020,18 +1041,6 @@ html, body {
     gap: 8px;
 }
 
-.hab-nome {
-    display: block;
-    color: var(--text);
-    font-size: 0.75rem;
-}
-
-.hab-descricao {
-    display: block;
-    color: var(--muted);
-    font-size: 0.6875rem;
-}
-
 .config-ajuda-caminho {
     display: block;
     word-break: break-all;
@@ -1072,14 +1081,265 @@ html, body {
     z-index: 1000;
 }
 
-/* ---- Habilidades: criação conversacional (modo plan) ---- */
-.hab-chat {
+/* ---- Catálogo de habilidades e ferramentas ---- */
+.cat {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+}
+
+.cat-barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.cat-busca {
+    flex: 1 1 160px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    outline: none;
+}
+
+.cat-busca:focus {
+    border-color: var(--accent);
+}
+
+.cat-contador {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    white-space: nowrap;
+}
+
+.cat-novo {
+    padding: 8px 12px;
+    border-radius: 9px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--accent-soft);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.cat-novo:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.cat-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cat-vazio {
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.cat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    background: var(--panel-2);
+    transition: border-color 0.15s;
+}
+
+.cat-item:hover {
+    border-color: var(--accent-strong);
+}
+
+.cat-item-perigo {
+    border-color: var(--danger, #e5484d);
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.cat-item-aviso {
+    flex: 1 1 160px;
+    color: var(--text);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+.cat-item-principal {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cat-item-nome {
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.cat-item-principal:hover .cat-item-nome {
+    color: var(--accent-soft);
+}
+
+.cat-item-descricao {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.6875rem;
+    line-height: 1.35;
+}
+
+.cat-item-acoes {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 4px;
+}
+
+.cat-acao,
+.cat-selo {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.cat-acao:hover,
+.cat-selo:hover {
+    color: var(--accent);
+    border-color: var(--accent-strong);
+    background: var(--accent-glow-soft);
+}
+
+.cat-acao-perigo:hover {
+    color: var(--danger, #e5484d);
+    border-color: var(--danger, #e5484d);
+    background: transparent;
+}
+
+.cat-selo-direto {
+    color: var(--accent);
+    border-color: var(--accent-strong);
+}
+
+.cat-link-perigo {
+    color: var(--danger, #e5484d);
+    border-color: var(--danger, #e5484d);
+}
+
+.cat-link-perigo:hover {
+    color: #fff;
+    border-color: var(--danger, #e5484d);
+    background: var(--danger, #e5484d);
+}
+
+/* Painel de detalhe: um item por vez, no lugar da lista */
+.cat-painel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+}
+
+.cat-topo {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.cat-voltar {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.cat-voltar:hover {
+    color: var(--accent-soft);
+    border-color: var(--accent-strong);
+    background: var(--accent-glow-soft);
+    transform: translateX(-2px);
+}
+
+.cat-topo-texto {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.cat-topo-titulo {
+    color: var(--text);
+    font-size: 0.875rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.cat-topo-sub {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    line-height: 1.35;
+}
+
+.cat-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+/* Conversa com a Alina (criar, editar, treinar) */
+.cat-chat {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
-.hab-chat-log {
+.cat-chat-log {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -1088,20 +1348,20 @@ html, body {
     padding: 4px;
 }
 
-.hab-chat-vazio {
+.cat-chat-vazio {
     color: var(--muted);
     font-size: 0.75rem;
     line-height: 1.5;
 }
 
-.hab-chat-composer {
+.cat-chat-composer {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: flex-end;
 }
 
-.hab-chat-campo {
+.cat-chat-campo {
     flex: 1 1 200px;
     min-width: 0;
     resize: vertical;
@@ -1111,30 +1371,75 @@ html, body {
     font-size: 0.8125rem;
 }
 
-.hab-rascunho {
-    border: 1px solid var(--accent-strong);
-    border-radius: 10px;
-    background: var(--accent-glow-soft);
-    padding: 12px;
+.cat-chat-acoes {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.hab-rascunho-titulo {
-    color: var(--accent-soft);
-    font-weight: 600;
-    font-size: 0.8125rem;
-}
-
-.hab-rascunho-acoes {
-    display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 8px;
 }
 
-/* ---- Ferramentas: editor/pré-visualização JSON ---- */
-.ferr-json-preview {
+.cat-rascunho {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--accent-strong);
+    border-radius: 10px;
+    background: var(--accent-glow-soft);
+}
+
+.cat-rascunho-titulo {
+    color: var(--accent-soft);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+/* Treino: rodar a habilidade de verdade antes de corrigi-la */
+.cat-treino {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+}
+
+.cat-treino-teste {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Editor de texto/JSON */
+.cat-abas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.cat-abas-aba {
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.cat-abas-aba:hover {
+    color: var(--accent-soft);
+}
+
+.cat-abas-aba-ativa {
+    color: var(--accent);
+    border-color: var(--accent-strong);
+    background: var(--accent-glow-soft);
+}
+
+.cat-json {
     margin: 0;
     max-height: min(320px, 45vh);
     overflow: auto;
@@ -1144,47 +1449,12 @@ html, body {
     line-height: 1.4;
 }
 
-.ferr-json-editor {
-    font-family: "Cascadia Code", "Consolas", monospace;
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-.ferr-erro {
+.cat-erro {
     display: block;
     color: var(--danger, #e5484d);
     font-size: 0.75rem;
-    margin-top: 4px;
 }
 
-/* ---- Habilidades: alternador editar/pré-visualizar ---- */
-.hab-abas {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 8px;
-}
-
-.hab-abas-aba {
-    padding: 5px 12px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 0.75rem;
-    transition: border-color 0.15s, color 0.15s;
-}
-
-.hab-abas-aba:hover {
-    color: var(--accent-soft);
-}
-
-.hab-abas-aba-ativa {
-    color: var(--accent);
-    border-color: var(--accent-strong);
-    background: var(--accent-glow-soft);
-}
 
 /* ---- Markdown renderizado ---- */
 .md-render {

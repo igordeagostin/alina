@@ -1,0 +1,485 @@
+@* Catálogo de habilidades: lista com busca e, em cima dela, um painel por vez —
+   visualizar, editar com a Alina, editar o texto ou treinar. *@
+
+@using Alina.App.Services
+@using Alina.Core.Habilidades
+@using Alina.Core.Orchestration
+@using Microsoft.Extensions.AI
+@inject IHabilidadeStore Habilidades
+@inject IGeradorHabilidade Gerador
+@inject VoiceController Voz
+@inject IAssistantStatus Status
+
+@if (_modo == Modo.Lista)
+{
+    <div class="cfg-card">
+        <div class="cfg-row cfg-row-empilhado">
+            <span class="cfg-row-titulo">Habilidades aprendidas</span>
+            <span class="cfg-row-sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Alterações aqui são gravadas na hora.</span>
+        </div>
+    </div>
+
+    <div class="cat">
+        <div class="cat-barra">
+            <input class="cat-busca" @bind="_busca" @bind:event="oninput" placeholder="Buscar habilidade…" />
+            <span class="cat-contador">@Filtradas.Count de @_itens.Count</span>
+            <button class="cat-novo" @onclick="IniciarCriacao">＋ Nova</button>
+        </div>
+
+        <div class="cat-lista">
+            @if (_itens.Count == 0)
+            {
+                <span class="cat-vazio">Nenhuma habilidade ainda. Peça à Alina para aprender uma, ou crie aqui.</span>
+            }
+            else if (Filtradas.Count == 0)
+            {
+                <span class="cat-vazio">Nada encontrado para "@_busca".</span>
+            }
+
+            @foreach (HabilidadeResumo h in Filtradas)
+            {
+                @if (_confirmandoRemocao == h.Nome)
+                {
+                    <div class="cat-item cat-item-perigo">
+                        <span class="cat-item-aviso">Remover "@h.Nome" de vez?</span>
+                        <div class="cat-item-acoes">
+                            <button class="config-link" @onclick="() => _confirmandoRemocao = null">cancelar</button>
+                            <button class="config-link cat-link-perigo" @onclick="() => RemoverAsync(h.Nome)">remover</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="cat-item">
+                        <button class="cat-item-principal" @onclick="() => AbrirDetalheAsync(h.Nome)">
+                            <span class="cat-item-nome">@h.Nome</span>
+                            <span class="cat-item-descricao">@(string.IsNullOrWhiteSpace(h.Descricao) ? "sem descrição" : h.Descricao)</span>
+                        </button>
+                        <div class="cat-item-acoes">
+                            <button class="cat-acao" title="Conversar com a Alina para ajustar" @onclick="() => ConversarAsync(h.Nome)">✦</button>
+                            <button class="cat-acao" title="Treinar: testar e corrigir" @onclick="() => TreinarAsync(h.Nome)">🎯</button>
+                            <button class="cat-acao" title="Editar o texto" @onclick="() => EditarTextoAsync(h.Nome)">✎</button>
+                            <button class="cat-acao cat-acao-perigo" title="Remover" @onclick="() => _confirmandoRemocao = h.Nome">🗑</button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div class="cat-painel">
+        <div class="cat-topo">
+            <button class="cat-voltar" @onclick="VoltarAsync" title="Voltar à lista">←</button>
+            <div class="cat-topo-texto">
+                <span class="cat-topo-titulo">@TituloPainel</span>
+                <span class="cat-topo-sub">@SubtituloPainel</span>
+            </div>
+        </div>
+
+        @if (_modo == Modo.Detalhe && _selecionada is not null)
+        {
+            <div class="cat-acoes">
+                <button class="config-link" @onclick="() => ConversarAsync(_selecionada.Nome)">✦ ajustar com a Alina</button>
+                <button class="config-link" @onclick="() => TreinarAsync(_selecionada.Nome)">🎯 treinar</button>
+                <button class="config-link" @onclick="() => EditarTextoAsync(_selecionada.Nome)">✎ editar texto</button>
+            </div>
+            <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_selecionada.Conteudo)))</div>
+        }
+
+        @if (_modo == Modo.Chat)
+        {
+            <ChatGeracao Historico="_historico" Gerando="_gerando" Enviar="EnviarAsync" Dica="@DicaChat">
+                <Rascunho>
+                    @if (_rascunho is not null)
+                    {
+                        <CartaoRascunho Titulo="@RotuloRascunho" Descricao="@_rascunho.Descricao"
+                                        RotuloAplicar="@RotuloAplicar" Revisar="RevisarRascunho" Aplicar="AplicarRascunhoAsync">
+                            <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_rascunho.Conteudo)))</div>
+                        </CartaoRascunho>
+                    }
+                </Rascunho>
+                <Acoes>
+                    <button class="config-link" @onclick="PreencherManualmente">preencher manualmente</button>
+                    <button class="cfg-cancelar" @onclick="VoltarAsync">Cancelar</button>
+                </Acoes>
+            </ChatGeracao>
+        }
+
+        @if (_modo == Modo.Treino)
+        {
+            <div class="cat-treino">
+                <span class="cfg-row-sub">
+                    Peça algo como você pediria no dia a dia e veja a Alina executar de verdade — inclusive
+                    as confirmações. Depois diga o que ficou errado: ela corrige a habilidade e você testa de novo.
+                </span>
+                <div class="cat-treino-teste">
+                    <input class="config-campo" @bind="_pedidoTeste" @bind:event="oninput" @onkeydown="AoTeclarTesteAsync"
+                           placeholder="Ex.: publica a API do Diário em homologação" disabled="@_executandoTeste" />
+                    <button class="config-link" @onclick="ExecutarTesteAsync"
+                            disabled="@(_executandoTeste || _gerando || string.IsNullOrWhiteSpace(_pedidoTeste))">
+                        @(_executandoTeste ? "executando…" : "▶ executar teste")
+                    </button>
+                </div>
+            </div>
+
+            <ChatGeracao Historico="_historico" Gerando="_gerando" Enviar="EnviarAsync"
+                         Placeholder="O que ficou errado ou faltou?"
+                         Dica="Rode um teste acima e depois conte o que a Alina deveria ter feito diferente.">
+                <Rascunho>
+                    @if (_rascunho is not null)
+                    {
+                        <CartaoRascunho Titulo="@RotuloRascunho" Descricao="@_rascunho.Descricao"
+                                        RotuloAplicar="@RotuloAplicar" Revisar="RevisarRascunho" Aplicar="AplicarRascunhoAsync">
+                            <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_rascunho.Conteudo)))</div>
+                        </CartaoRascunho>
+                    }
+                </Rascunho>
+                <Acoes>
+                    <button class="cfg-cancelar" @onclick="VoltarAsync">Encerrar treino</button>
+                </Acoes>
+            </ChatGeracao>
+        }
+
+        @if (_modo == Modo.Editor)
+        {
+            <input class="config-campo" @bind="_titulo" placeholder="Título (ex.: Deploy da API do Diário)" />
+            <input class="config-campo" @bind="_descricao" placeholder="Descrição de uma linha" />
+            <div class="cat-abas">
+                <button class="cat-abas-aba @(!_preview ? "cat-abas-aba-ativa" : string.Empty)"
+                        @onclick="() => _preview = false">Editar</button>
+                <button class="cat-abas-aba @(_preview ? "cat-abas-aba-ativa" : string.Empty)"
+                        @onclick="() => _preview = true">Pré-visualizar</button>
+            </div>
+            @if (_preview)
+            {
+                <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_conteudo)))</div>
+            }
+            else
+            {
+                <textarea class="cfg-textarea" @bind="_conteudo" rows="12"
+                          placeholder="Instruções da habilidade, em Markdown…"></textarea>
+            }
+            <div class="cat-acoes">
+                <button class="cfg-cancelar" @onclick="VoltarAsync">Cancelar</button>
+                <button class="cfg-salvar" @onclick="SalvarEditorAsync"
+                        disabled="@(string.IsNullOrWhiteSpace(_titulo) || string.IsNullOrWhiteSpace(_conteudo))">
+                    Salvar habilidade
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private enum Modo { Lista, Detalhe, Chat, Treino, Editor }
+
+    private List<HabilidadeResumo> _itens = new();
+    private Modo _modo = Modo.Lista;
+    private string _busca = string.Empty;
+    private string? _confirmandoRemocao;
+    private Habilidade? _selecionada;
+
+    private readonly List<ChatMessage> _historico = new();
+    private ContextoHabilidade? _contexto;
+    private RascunhoHabilidade? _rascunho;
+    private bool _gerando;
+
+    private string _pedidoTeste = string.Empty;
+    private bool _executandoTeste;
+
+    private bool _ehNova;
+    private string _nomeOriginal = string.Empty;
+    private string _titulo = string.Empty;
+    private string _descricao = string.Empty;
+    private string _conteudo = string.Empty;
+    private bool _preview;
+
+    private List<HabilidadeResumo> Filtradas
+    {
+        get
+        {
+            string termo = _busca.Trim();
+            if (termo.Length == 0)
+            {
+                return _itens;
+            }
+
+            return _itens
+                .Where(h => h.Nome.Contains(termo, StringComparison.OrdinalIgnoreCase)
+                    || h.Descricao.Contains(termo, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private string TituloPainel => _modo switch
+    {
+        Modo.Detalhe => _selecionada?.Nome ?? string.Empty,
+        Modo.Chat when _contexto is not null => $"Ajustando: {_contexto.Atual.Nome}",
+        Modo.Chat => "Nova habilidade",
+        Modo.Treino => $"Treinando: {_contexto?.Atual.Nome}",
+        Modo.Editor when _ehNova => "Nova habilidade",
+        _ => $"Editando: {_nomeOriginal}",
+    };
+
+    private string SubtituloPainel => _modo switch
+    {
+        Modo.Detalhe => _selecionada?.Descricao ?? string.Empty,
+        Modo.Chat when _contexto is not null => "a Alina já conhece o documento atual",
+        Modo.Chat => "converse com a Alina até o documento ficar bom",
+        Modo.Treino => "teste, corrija e salve — quantas vezes precisar",
+        _ => "edição direta do Markdown",
+    };
+
+    private string DicaChat => _contexto is null
+        ? "Descreva o que você quer que a Alina aprenda — por exemplo, \"como eu faço o deploy da API do Diário\". Ela pergunta o que faltar e monta o documento."
+        : "Diga o que mudar — por exemplo, \"o passo 3 mudou de branch\" ou \"acrescenta o comando de rollback\".";
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync() => _itens = (await Habilidades.ListarAsync()).ToList();
+
+    private string RotuloRascunho => _contexto is null
+        ? $"Rascunho: {_rascunho?.Titulo}"
+        : $"Nova versão: {_rascunho?.Titulo}";
+
+    private string RotuloAplicar => _contexto is null ? "Salvar habilidade" : "Salvar nova versão";
+
+    private async Task AbrirDetalheAsync(string nome)
+    {
+        _selecionada = await Habilidades.ObterAsync(nome);
+        if (_selecionada is null)
+        {
+            await CarregarAsync();
+            return;
+        }
+
+        _confirmandoRemocao = null;
+        _modo = Modo.Detalhe;
+    }
+
+    private void IniciarCriacao()
+    {
+        LimparConversa();
+        _contexto = null;
+        _selecionada = null;
+        _modo = Modo.Chat;
+    }
+
+    private async Task ConversarAsync(string nome)
+    {
+        Habilidade? habilidade = await Habilidades.ObterAsync(nome);
+        if (habilidade is null)
+        {
+            await VoltarAsync();
+            return;
+        }
+
+        LimparConversa();
+        _selecionada = habilidade;
+        _contexto = new ContextoHabilidade(habilidade, ModoConversaHabilidade.Edicao);
+        _modo = Modo.Chat;
+    }
+
+    private async Task TreinarAsync(string nome)
+    {
+        Habilidade? habilidade = await Habilidades.ObterAsync(nome);
+        if (habilidade is null)
+        {
+            await VoltarAsync();
+            return;
+        }
+
+        LimparConversa();
+        _selecionada = habilidade;
+        _contexto = new ContextoHabilidade(habilidade, ModoConversaHabilidade.Treino);
+        _pedidoTeste = string.Empty;
+        _modo = Modo.Treino;
+    }
+
+    private async Task EditarTextoAsync(string nome)
+    {
+        Habilidade? habilidade = await Habilidades.ObterAsync(nome);
+        if (habilidade is null)
+        {
+            await VoltarAsync();
+            return;
+        }
+
+        _selecionada = habilidade;
+        _ehNova = false;
+        _nomeOriginal = habilidade.Nome;
+        _titulo = habilidade.Nome;
+        _descricao = habilidade.Descricao;
+        _conteudo = habilidade.Conteudo;
+        _preview = false;
+        _modo = Modo.Editor;
+    }
+
+    private void PreencherManualmente()
+    {
+        _ehNova = _contexto is null;
+        _nomeOriginal = _contexto?.Atual.Nome ?? string.Empty;
+        _titulo = _rascunho?.Titulo ?? _contexto?.Atual.Nome ?? string.Empty;
+        _descricao = _rascunho?.Descricao ?? _contexto?.Atual.Descricao ?? string.Empty;
+        _conteudo = _rascunho?.Conteudo ?? _contexto?.Atual.Conteudo ?? string.Empty;
+        _preview = false;
+        _modo = Modo.Editor;
+    }
+
+    private void RevisarRascunho() => PreencherManualmente();
+
+    private void LimparConversa()
+    {
+        _historico.Clear();
+        _rascunho = null;
+        _gerando = false;
+        _confirmandoRemocao = null;
+    }
+
+    private async Task EnviarAsync(string texto)
+    {
+        if (_gerando)
+        {
+            return;
+        }
+
+        _historico.Add(new ChatMessage(ChatRole.User, texto));
+        _gerando = true;
+        try
+        {
+            RespostaGeracao resposta = await Gerador.ContinuarAsync(_historico, _contexto);
+            _historico.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
+            _rascunho = resposta.Rascunho;
+        }
+        catch (Exception ex)
+        {
+            _historico.Add(new ChatMessage(ChatRole.Assistant, $"[erro] {ex.Message}"));
+        }
+        finally
+        {
+            _gerando = false;
+        }
+    }
+
+    private async Task AoTeclarTesteAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ExecutarTesteAsync();
+        }
+    }
+
+    private async Task ExecutarTesteAsync()
+    {
+        string pedido = _pedidoTeste.Trim();
+        if (pedido.Length == 0 || _executandoTeste)
+        {
+            return;
+        }
+
+        if (Status.Current != AssistantState.Idle)
+        {
+            _historico.Add(new ChatMessage(ChatRole.Assistant, "[erro] a Alina está ocupada com outra coisa; tente de novo em instantes."));
+            return;
+        }
+
+        _historico.Add(new ChatMessage(ChatRole.User, $"[teste] {pedido}"));
+        _executandoTeste = true;
+        try
+        {
+            string resultado = await Voz.ExecutarParaTreinoAsync(pedido);
+            _historico.Add(new ChatMessage(ChatRole.User, resultado.Length == 0
+                ? "[resultado] não rodou: a Alina estava ocupada com outro turno."
+                : $"[resultado] {resultado}"));
+        }
+        catch (Exception ex)
+        {
+            _historico.Add(new ChatMessage(ChatRole.User, $"[resultado] falhou: {ex.Message}"));
+        }
+        finally
+        {
+            _executandoTeste = false;
+        }
+    }
+
+    private async Task AplicarRascunhoAsync()
+    {
+        if (_rascunho is null)
+        {
+            return;
+        }
+
+        Habilidade nova = new Habilidade
+        {
+            Nome = _rascunho.Titulo,
+            Descricao = _rascunho.Descricao,
+            Conteudo = _rascunho.Conteudo,
+        };
+
+        await GravarAsync(nova, _contexto?.Atual.Nome);
+        _rascunho = null;
+
+        if (_modo == Modo.Treino)
+        {
+            _contexto = new ContextoHabilidade(nova, ModoConversaHabilidade.Treino);
+            _selecionada = nova;
+            _historico.Add(new ChatMessage(ChatRole.Assistant, "Salvei a nova versão. Pode testar de novo."));
+            return;
+        }
+
+        _selecionada = nova;
+        _contexto = null;
+        _modo = Modo.Detalhe;
+    }
+
+    private async Task SalvarEditorAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_titulo) || string.IsNullOrWhiteSpace(_conteudo))
+        {
+            return;
+        }
+
+        Habilidade nova = new Habilidade
+        {
+            Nome = _titulo,
+            Descricao = _descricao.Trim(),
+            Conteudo = _conteudo,
+        };
+
+        await GravarAsync(nova, _ehNova ? null : _nomeOriginal);
+        _selecionada = nova;
+        _contexto = null;
+        _modo = Modo.Detalhe;
+    }
+
+    private async Task GravarAsync(Habilidade nova, string? nomeAnterior)
+    {
+        await Habilidades.SalvarAsync(nova);
+
+        if (!string.IsNullOrEmpty(nomeAnterior)
+            && !string.Equals(nomeAnterior, nova.Nome, StringComparison.OrdinalIgnoreCase))
+        {
+            await Habilidades.RemoverAsync(nomeAnterior);
+        }
+
+        await CarregarAsync();
+    }
+
+    private async Task RemoverAsync(string nome)
+    {
+        await Habilidades.RemoverAsync(nome);
+        _confirmandoRemocao = null;
+        await CarregarAsync();
+    }
+
+    private async Task VoltarAsync()
+    {
+        LimparConversa();
+        _contexto = null;
+        _selecionada = null;
+        _modo = Modo.Lista;
+        await CarregarAsync();
+    }
+}

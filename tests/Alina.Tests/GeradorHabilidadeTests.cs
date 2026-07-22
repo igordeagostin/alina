@@ -136,6 +136,64 @@ public sealed class GeradorHabilidadeTests
         Assert.Equal("quase lá", resposta.Mensagem);
     }
 
+    private static Habilidade HabilidadeExistente() => new Habilidade
+    {
+        Nome = "deploy-da-api-do-diario",
+        Descricao = "Publica a API do Diário",
+        Conteudo = "# Deploy\n1. dotnet publish",
+    };
+
+    [Fact]
+    public async Task ContinuarAsync_em_edicao_injeta_a_habilidade_atual()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) =>
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+
+        await gerador.ContinuarAsync(
+            Historico("troca o passo 1"),
+            new ContextoHabilidade(HabilidadeExistente(), ModoConversaHabilidade.Edicao));
+
+        string contexto = string.Concat(
+            client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
+        Assert.Contains("editar uma \"habilidade\" que já existe", contexto);
+        Assert.Contains("deploy-da-api-do-diario", contexto);
+        Assert.Contains("dotnet publish", contexto);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_em_treino_orienta_a_partir_dos_testes()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) =>
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+
+        await gerador.ContinuarAsync(
+            Historico("[resultado] rodou no branch errado"),
+            new ContextoHabilidade(HabilidadeExistente(), ModoConversaHabilidade.Treino));
+
+        string contexto = string.Concat(
+            client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
+        Assert.Contains("treinando", contexto);
+        Assert.Contains("[resultado]", contexto);
+        Assert.Contains("deploy-da-api-do-diario", contexto);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_sem_contexto_nao_menciona_habilidade_existente()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) =>
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+
+        await gerador.ContinuarAsync(Historico("quero uma habilidade"));
+
+        string contexto = string.Concat(
+            client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
+        Assert.Contains("criar uma nova \"habilidade\"", contexto);
+        Assert.DoesNotContain("Habilidade atual", contexto);
+    }
+
     [Fact]
     public async Task ContinuarAsync_resposta_nao_json_vira_mensagem()
     {

@@ -16,6 +16,12 @@ public sealed class ConfiguracoesApp
     /// <summary>Atender quando o nome "Alina" for dito (palavra de ativação), além da hotkey.</summary>
     public bool EscutarPalavraAtivacao { get; set; }
 
+    /// <summary>Deixar cortá-la no meio: falar durante a resposta cancela o turno em andamento.</summary>
+    public bool InterromperPorVoz { get; set; } = true;
+
+    /// <summary>Termos que interrompem a Alina enquanto ela pensa ou fala, além do próprio nome.</summary>
+    public List<string> PalavrasInterrupcao { get; set; } = ["espera", "espere", "chega", "cancela", "esquece"];
+
     /// <summary>Voz do TTS. Ex.: "nova", "alloy", "shimmer".</summary>
     public string Voz { get; set; } = "nova";
 
@@ -33,4 +39,28 @@ public sealed class ConfiguracoesApp
 
     /// <summary>Escala do texto da interface (1.0 = padrão). Multiplica o tamanho-base da fonte.</summary>
     public double EscalaInterface { get; set; } = 1.0;
+
+    /// <summary>Reabrir a janela no último tamanho deixado pelo usuário em cada modo.</summary>
+    public bool LembrarTamanhoJanela { get; set; } = true;
+
+    /// <summary>Último tamanho usado no modo compacto; nulo enquanto o padrão não for alterado.</summary>
+    public TamanhoJanela? JanelaCompacta { get; set; }
+
+    /// <summary>Último tamanho usado no modo detalhado; nulo enquanto o padrão não for alterado.</summary>
+    public TamanhoJanela? JanelaDetalhada { get; set; }
+
+    /// <summary>
+    /// Mostrar o mini player flutuante quando a Alina for acionada com a janela
+    /// oculta (iniciada com o Windows ou fechada para a bandeja).
+    /// </summary>
+    public bool MostrarMiniPlayer { get; set; } = true;
+
+    /// <summary>Canto da tela onde o mini player aparece.</summary>
+    public CantoTela CantoMiniPlayer { get; set; } = CantoTela.InferiorDireito;
+
+    /// <summary>Exibir no mini player a última fala reconhecida e a resposta.</summary>
+    public bool MiniPlayerMostraTexto { get; set; } = true;
+
+    /// <summary>Tempo (segundos) que o mini player continua visível após o fim do diálogo.</summary>
+    public double SegundosMiniPlayerVisivel { get; set; } = 5;
 }

@@ -1,0 +1,79 @@
+@* Conversa com a Alina sobre um item do catálogo — o mesmo bloco serve para criar, editar e treinar. *@
+
+@using Microsoft.Extensions.AI
+
+<div class="cat-chat">
+    <div class="cat-chat-log">
+        @if (Historico.Count == 0 && !string.IsNullOrWhiteSpace(Dica))
+        {
+            <span class="cat-chat-vazio">@Dica</span>
+        }
+        @foreach (ChatMessage m in Historico)
+        {
+            <div class="msg @ClasseDe(m)">@m.Text</div>
+        }
+        @if (Gerando)
+        {
+            <div class="msg msg-bot msg-pending">pensando…</div>
+        }
+    </div>
+
+    @Rascunho
+
+    <div class="cat-chat-composer">
+        <textarea class="config-campo cat-chat-campo" @bind="_texto" @bind:event="oninput"
+                  placeholder="@Placeholder" disabled="@Gerando"></textarea>
+        <button class="cfg-salvar" @onclick="EnviarAsync"
+                disabled="@(Gerando || string.IsNullOrWhiteSpace(_texto))">Enviar</button>
+    </div>
+
+    @if (Acoes is not null)
+    {
+        <div class="cat-chat-acoes">@Acoes</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<ChatMessage> Historico { get; set; } = new();
+    [Parameter] public bool Gerando { get; set; }
+    [Parameter] public string Dica { get; set; } = string.Empty;
+    [Parameter] public string Placeholder { get; set; } = "Digite sua mensagem…";
+    [Parameter] public EventCallback<string> Enviar { get; set; }
+    [Parameter] public RenderFragment? Rascunho { get; set; }
+    [Parameter] public RenderFragment? Acoes { get; set; }
+
+    private string _texto = string.Empty;
+
+    /// <summary>
+    /// As execuções de treino entram no histórico como mensagens do usuário (é assim
+    /// que o modelo as lê), mas ganham um visual próprio para não se confundirem com
+    /// o que você digitou.
+    /// </summary>
+    private static string ClasseDe(ChatMessage mensagem)
+    {
+        string texto = mensagem.Text ?? string.Empty;
+        if (texto.StartsWith("[teste]", StringComparison.Ordinal))
+        {
+            return "msg-teste";
+        }
+
+        if (texto.StartsWith("[resultado]", StringComparison.Ordinal))
+        {
+            return "msg-resultado";
+        }
+
+        return mensagem.Role == ChatRole.User ? "msg-user" : "msg-bot";
+    }
+
+    private async Task EnviarAsync()
+    {
+        string texto = _texto.Trim();
+        if (texto.Length == 0 || Gerando)
+        {
+            return;
+        }
+
+        _texto = string.Empty;
+        await Enviar.InvokeAsync(texto);
+    }
+}

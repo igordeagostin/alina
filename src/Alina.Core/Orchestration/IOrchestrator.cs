@@ -21,6 +21,13 @@ public interface IOrchestrator
     Task<string> SendAsync(string userText, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Anota na conversa atual um fato sobre a própria interação (ex.: "o usuário
+    /// interrompeu você no meio da fala"), para que o próximo turno leve isso em conta.
+    /// Não chama o LLM: só registra na memória de trabalho.
+    /// </summary>
+    void RegistrarNota(string nota);
+
+    /// <summary>
     /// Gera um resumo conciso da conversa atual (via LLM, sem tools), para memorizá-la
     /// sob demanda. Retorna string vazia se não há nada a resumir.
     /// </summary>

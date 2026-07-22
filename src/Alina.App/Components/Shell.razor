@@ -1,17 +1,14 @@
 @using System.Globalization
-@using System.Text.Json
 @using Alina.App.Services
-@using Alina.Core.Ferramentas
-@using Alina.Core.Habilidades
 @using Alina.Core.Orchestration
 @using Alina.Core.Permissoes
 @using Alina.Core.Personalidade
+@using Alina.Infrastructure.Configuration
 @using Alina.Infrastructure.Llm
-@using Microsoft.Extensions.AI
 @using Microsoft.JSInterop
 @inject ConfiguracoesLlmService ConfigLlm
 @inject ConfiguracoesClaudeCodeService ConfigClaudeCode
-@inject ReconfigurableChatClient Reconfig
+@inject RegistroClientesLlm ClientesLlm
 @inject ShellUiState UiState
 @inject IAssistantStatus Status
 @inject VoiceController Voz
@@ -23,10 +20,6 @@
 @inject PastaDadosService PastaDados
 @inject ConfiguracoesService Config
 @inject IPersonalidadeStore Personalidade
-@inject IHabilidadeStore Habilidades
-@inject IGeradorHabilidade GeradorHab
-@inject IFerramentaStore Ferramentas
-@inject IGeradorFerramenta GeradorFerr
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -43,7 +36,7 @@
     <div class="voz">
         <div class="orb-area">
             <span class="orb-aura"></span>
-            <button class="orb orb-principal" @onclick="AlternarEscutaAsync" disabled="@Ocupado" title="@RotuloMicrofone">
+            <button class="orb orb-principal" @onclick="AlternarEscutaAsync" title="@RotuloMicrofone">
                 <span class="orb-pulso"></span>
             </button>
         </div>
@@ -68,9 +61,8 @@
                placeholder="Ou digite aqui…"
                @bind="_input"
                @bind:event="oninput"
-               @onkeydown="OnKeyDown"
-               disabled="@Ocupado" />
-        <button class="shell-send" @onclick="EnviarTextoAsync" disabled="@(Ocupado || string.IsNullOrWhiteSpace(_input))">
+               @onkeydown="OnKeyDown" />
+        <button class="shell-send" @onclick="EnviarTextoAsync" disabled="@string.IsNullOrWhiteSpace(_input)">
             Enviar
         </button>
     </div>
@@ -123,6 +115,40 @@
                     </div>
 
                     <div class="cfg-card">
+                        <label class="cfg-row">
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Mini player na bandeja</span>
+                                <span class="cfg-row-sub">Com a janela fechada, um cartão flutuante avisa que a Alina ouviu o nome dela e mostra o diálogo em andamento</span>
+                            </div>
+                            <input type="checkbox" class="cfg-switch" @bind="_edicao.MostrarMiniPlayer" />
+                        </label>
+                        @if (_edicao.MostrarMiniPlayer)
+                        {
+                            <div class="cfg-row cfg-row-empilhado">
+                                <span class="cfg-row-titulo">Canto da tela</span>
+                                <select class="cfg-campo" @bind="_edicao.CantoMiniPlayer">
+                                    <option value="@CantoTela.InferiorDireito">Inferior direito (perto do relógio)</option>
+                                    <option value="@CantoTela.InferiorEsquerdo">Inferior esquerdo</option>
+                                    <option value="@CantoTela.SuperiorDireito">Superior direito</option>
+                                    <option value="@CantoTela.SuperiorEsquerdo">Superior esquerdo</option>
+                                </select>
+                            </div>
+                            <label class="cfg-row">
+                                <div class="cfg-row-texto">
+                                    <span class="cfg-row-titulo">Mostrar o que foi dito</span>
+                                    <span class="cfg-row-sub">Exibe a última fala e a resposta no cartão</span>
+                                </div>
+                                <input type="checkbox" class="cfg-switch" @bind="_edicao.MiniPlayerMostraTexto" />
+                            </label>
+                            <CampoDeslizante Titulo="Tempo visível ao terminar"
+                                             Descricao="Quanto o cartão continua na tela depois que a Alina termina de responder"
+                                             Sufixo="s" Minimo="2" Maximo="20" Passo="1" Casas="0"
+                                             Valor="_edicao.SegundosMiniPlayerVisivel"
+                                             ValorChanged="(double v) => _edicao.SegundosMiniPlayerVisivel = v" />
+                        }
+                    </div>
+
+                    <div class="cfg-card">
                         <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Pasta de dados</span>
                             <div class="cfg-voz">
@@ -143,22 +169,69 @@
                                          Valor="_edicao.EscalaInterface"
                                          ValorChanged="AoMudarEscalaAsync" />
                     </div>
+
+                    <div class="cfg-card">
+                        <label class="cfg-row">
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Lembrar tamanho da janela</span>
+                                <span class="cfg-row-sub">Reabre a Alina com a largura e a altura que você deixou em cada modo, compacto e detalhado. Desligado, ela sempre volta ao tamanho padrão.</span>
+                            </div>
+                            <input type="checkbox" class="cfg-switch" @bind="_edicao.LembrarTamanhoJanela" />
+                        </label>
+                        @if (_edicao.LembrarTamanhoJanela)
+                        {
+                            <div class="cfg-row">
+                                <div class="cfg-row-texto">
+                                    <span class="cfg-row-titulo">Tamanho memorizado</span>
+                                    <span class="cfg-row-sub">@TamanhoJanelaMemorizado()</span>
+                                </div>
+                                <button class="cfg-acao" @onclick="RestaurarTamanhoJanela"
+                                        disabled="@(!Config.TemTamanhoJanelaMemorizado)">Restaurar padrão</button>
+                            </div>
+                        }
+                    </div>
                 }
 
                 @if (_aba == AbaConfig.IA)
                 {
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row-empilhado">
-                            <span class="cfg-row-titulo">Modelo do cérebro</span>
-                            <select class="cfg-campo" @bind="_modeloLlm">
-                                @foreach (var m in ConfigLlm.ModelosDisponiveis)
-                                {
-                                    <option value="@m.Id">@m.Rotulo — @m.Custo</option>
-                                }
-                            </select>
-                            <span class="cfg-row-sub">Modelos mais avançados conversam melhor, porém custam mais por uso. O trabalho pesado de código continua indo para o Claude Code (sua assinatura).</span>
+                            <span class="cfg-row-titulo">Modelos por função</span>
+                            <span class="cfg-row-sub">Cada função da Alina pode usar um modelo próprio. Conversar é o que mais roda, então costuma valer um modelo econômico da API; criar e treinar habilidades roda pouco e exige raciocínio — e como só troca texto, pode ir pelo Claude Code, na sua assinatura, sem custo por uso. A conversa fica na API porque é ela que precisa das ferramentas da Alina, e o CLI só enxerga as ferramentas dele.</span>
                         </div>
                     </div>
+
+                    @foreach (PapelLlmInfo papel in ConfigLlm.Papeis)
+                    {
+                        <div class="cfg-card">
+                            <div class="cfg-row cfg-row-empilhado">
+                                <span class="cfg-row-titulo">@papel.Titulo</span>
+                                <select class="cfg-campo" value="@_selecaoPapel[papel.Papel]"
+                                        @onchange="e => _selecaoPapel[papel.Papel] = e.Value?.ToString() ?? string.Empty">
+                                    @if (papel.Herdavel)
+                                    {
+                                        <option value="">Mesmo da conversa — @RotuloDe(_selecaoPapel[PapelLlm.Conversa])</option>
+                                    }
+                                    <optgroup label="OpenAI (API, cobrada por uso)">
+                                        @foreach (ModeloLlm m in ConfigLlm.ModelosDe(papel).Where(m => m.Provedor == LlmProvider.OpenAI))
+                                        {
+                                            <option value="@m.Selecao">@m.Rotulo — @m.Custo</option>
+                                        }
+                                    </optgroup>
+                                    @if (!papel.ExigeFerramentas)
+                                    {
+                                        <optgroup label="Claude Code (sua assinatura)">
+                                            @foreach (ModeloLlm m in ConfigLlm.ModelosDe(papel).Where(m => m.Provedor == LlmProvider.ClaudeCode))
+                                            {
+                                                <option value="@m.Selecao">@m.Rotulo — @m.Custo</option>
+                                            }
+                                        </optgroup>
+                                    }
+                                </select>
+                                <span class="cfg-row-sub">@papel.Descricao</span>
+                            </div>
+                        </div>
+                    }
 
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row-empilhado">
@@ -176,9 +249,9 @@
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Chave da API OpenAI</span>
-                            <input type="password" class="cfg-campo" @bind="_chaveLlm"
-                                   placeholder="@(ConfigLlm.ChaveDefinida ? "•••••••• (definida — deixe em branco para manter)" : "sk-…")" />
-                            <span class="cfg-row-sub">Guardada só neste computador, criptografada para o seu usuário do Windows — nunca é versionada nem enviada a lugar nenhum. Usada pelo cérebro (OpenAI) e pela voz.</span>
+                            <input type="password" class="cfg-campo" @bind="_chaveOpenAi"
+                                   placeholder="@(ConfigLlm.ChaveOpenAiDefinida ? "•••••••• (definida — deixe em branco para manter)" : "sk-…")" />
+                            <span class="cfg-row-sub">Única chave de API necessária: vale para os papéis em modelos da OpenAI, para a voz (transcrição e fala) e para a memória semântica. Os modelos Claude acima rodam pela sua assinatura do Claude Code e não pedem chave. Guardada só neste computador, criptografada para o seu usuário do Windows — nunca é versionada nem enviada a lugar nenhum.</span>
                         </div>
                     </div>
                 }
@@ -302,6 +375,20 @@
                                          Valor="_edicao.SegundosJanelaConversa"
                                          ValorChanged="(double v) => _edicao.SegundosJanelaConversa = v" />
                     </div>
+
+                    <div class="cfg-card">
+                        <label class="cfg-row">
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Deixar interromper por voz</span>
+                                <span class="cfg-row-sub">Enquanto ela pensa ou fala, chamá-la pelo nome corta a resposta na hora. Melhor com fones de ouvido</span>
+                            </div>
+                            <input type="checkbox" class="cfg-switch" @bind="_edicao.InterromperPorVoz"
+                                   disabled="@(!Config.PalavraAtivacaoDisponivel || !_edicao.EscutarPalavraAtivacao)" />
+                        </label>
+                        <ListaEditavel Titulo="Outras palavras que interrompem"
+                                       Itens="_edicao.PalavrasInterrupcao"
+                                       Placeholder="espera" />
+                    </div>
                 }
 
                 @if (_aba == AbaConfig.Permissoes)
@@ -370,242 +457,12 @@
 
                 @if (_aba == AbaConfig.Habilidades)
                 {
-                    <div class="cfg-card">
-                        <div class="cfg-row cfg-row-empilhado">
-                            <span class="cfg-row-titulo">Habilidades aprendidas</span>
-                            <span class="cfg-row-sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Alterações aqui são gravadas na hora.</span>
-                        </div>
-                    </div>
-
-                    <div class="config-grupo">
-                        @if (_habilidades.Count == 0)
-                        {
-                            <span class="cfg-row-sub">Nenhuma habilidade ainda. Peça à Alina para aprender uma, ou crie abaixo.</span>
-                        }
-                        @foreach (var h in _habilidades)
-                        {
-                            <div class="config-item config-item-empilhado">
-                                <div class="config-item-texto">
-                                    <strong class="hab-nome">@h.Nome</strong>
-                                    <span class="hab-descricao">@h.Descricao</span>
-                                </div>
-                                <div class="config-item-botoes">
-                                    <button class="config-link" @onclick="() => VisualizarHabilidadeAsync(h.Nome)">visualizar</button>
-                                    <button class="config-link" @onclick="() => EditarHabilidadeAsync(h.Nome)">editar</button>
-                                    <button class="config-link" @onclick="() => RemoverHabilidadeAsync(h.Nome)">remover</button>
-                                </div>
-                            </div>
-                        }
-                        @if (!_criandoHab && !_editandoHabilidade)
-                        {
-                            <button class="config-confiar" @onclick="IniciarCriacaoHab">＋ Nova habilidade</button>
-                        }
-                    </div>
-
-                    @if (_habVisualizando is not null)
-                    {
-                        <div class="config-grupo">
-                            <div class="cfg-row-cabecalho">
-                                <span class="config-grupo-titulo">@_habVisualizando.Nome</span>
-                                <button class="config-link" @onclick="FecharVisualizacao">fechar</button>
-                            </div>
-                            <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_habVisualizando.Conteudo)))</div>
-                        </div>
-                    }
-
-                    @if (_criandoHab)
-                    {
-                        <div class="config-grupo">
-                            <span class="config-grupo-titulo">Nova habilidade — converse com a Alina</span>
-                            <div class="hab-chat">
-                                <div class="hab-chat-log">
-                                    @if (_historicoHab.Count == 0)
-                                    {
-                                        <span class="hab-chat-vazio">Descreva o que você quer que a Alina aprenda — por exemplo, "como eu faço o deploy da API do Diário". Ela pergunta o que faltar e monta o documento.</span>
-                                    }
-                                    @foreach (var m in _historicoHab)
-                                    {
-                                        <div class="msg msg-@(m.Role == ChatRole.User ? "user" : "bot")">@m.Text</div>
-                                    }
-                                    @if (_gerandoHab)
-                                    {
-                                        <div class="msg msg-bot msg-pending">pensando…</div>
-                                    }
-                                </div>
-
-                                @if (_rascunhoHab is not null)
-                                {
-                                    <div class="hab-rascunho">
-                                        <span class="hab-rascunho-titulo">Rascunho: @_rascunhoHab.Titulo</span>
-                                        <span class="hab-descricao">@_rascunhoHab.Descricao</span>
-                                        <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_rascunhoHab.Conteudo)))</div>
-                                        <div class="hab-rascunho-acoes">
-                                            <button class="cfg-salvar" @onclick="AprovarRascunho">Aprovar e editar</button>
-                                        </div>
-                                    </div>
-                                }
-
-                                <div class="hab-chat-composer">
-                                    <textarea class="config-campo hab-chat-campo" @bind="_inputHab" @bind:event="oninput"
-                                              placeholder="Digite sua mensagem…" disabled="@_gerandoHab"></textarea>
-                                    <button class="cfg-salvar" @onclick="EnviarMensagemHabAsync"
-                                            disabled="@(_gerandoHab || string.IsNullOrWhiteSpace(_inputHab))">Enviar</button>
-                                </div>
-                                <div class="config-item config-item-acoes">
-                                    <button class="config-link" @onclick="PreencherManualmente">preencher manualmente</button>
-                                    <button class="cfg-cancelar" @onclick="CancelarCriacaoHab">Cancelar</button>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (_editandoHabilidade)
-                    {
-                        <div class="config-grupo">
-                            <span class="config-grupo-titulo">@(_habEhNova ? "Nova habilidade" : $"Editando: {_habNomeOriginal}")</span>
-                            <input class="config-campo" @bind="_habTitulo" placeholder="Título (ex: Deploy da API do Diário)" />
-                            <input class="config-campo" @bind="_habDescricao" placeholder="Descrição de uma linha" />
-                            <div class="hab-abas">
-                                <button class="hab-abas-aba @(!_habPreview ? "hab-abas-aba-ativa" : string.Empty)"
-                                        @onclick="() => _habPreview = false">Editar</button>
-                                <button class="hab-abas-aba @(_habPreview ? "hab-abas-aba-ativa" : string.Empty)"
-                                        @onclick="() => _habPreview = true">Pré-visualizar</button>
-                            </div>
-                            @if (_habPreview)
-                            {
-                                <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_habConteudo)))</div>
-                            }
-                            else
-                            {
-                                <textarea class="cfg-textarea" @bind="_habConteudo" rows="10"
-                                          placeholder="Instruções da habilidade, em Markdown…"></textarea>
-                            }
-                            <div class="config-item config-item-acoes">
-                                <button class="cfg-cancelar" @onclick="() => _editandoHabilidade = false">Cancelar</button>
-                                <button class="cfg-salvar" @onclick="SalvarHabilidadeAsync"
-                                        disabled="@(string.IsNullOrWhiteSpace(_habTitulo) || string.IsNullOrWhiteSpace(_habConteudo))">
-                                    Salvar habilidade
-                                </button>
-                            </div>
-                        </div>
-                    }
+                    <PainelHabilidades />
                 }
 
                 @if (_aba == AbaConfig.Ferramentas)
                 {
-                    <div class="cfg-card">
-                        <div class="cfg-row cfg-row-empilhado">
-                            <span class="cfg-row-titulo">Ferramentas da Alina</span>
-                            <span class="cfg-row-sub">Cada ferramenta é um comando que a Alina pode executar diretamente, definido em JSON — sem novo build. Desligar a confirmação é o que dispensa o SIM/NÃO; use com cuidado. Alterações valem no próximo turno.</span>
-                        </div>
-                    </div>
-
-                    <div class="config-grupo">
-                        @if (_ferramentas.Count == 0)
-                        {
-                            <span class="cfg-row-sub">Nenhuma ferramenta ainda. Peça à Alina para criar uma, ou crie abaixo.</span>
-                        }
-                        @foreach (var f in _ferramentas)
-                        {
-                            <div class="config-item config-item-empilhado">
-                                <div class="config-item-texto">
-                                    <strong class="hab-nome">@f.Nome</strong>
-                                    <span class="hab-descricao">@f.Descricao</span>
-                                </div>
-                                <div class="config-item-botoes">
-                                    <button class="config-link" title="@(f.ExigeConfirmacao ? "Pede confirmação ao executar" : "Roda sem confirmação")"
-                                            @onclick="() => AlternarConfirmacaoAsync(f.Nome)">
-                                        @(f.ExigeConfirmacao ? "🔒 confirma" : "⚡ direto")
-                                    </button>
-                                    <button class="config-link" @onclick="() => VisualizarFerramentaAsync(f.Nome)">visualizar</button>
-                                    <button class="config-link" @onclick="() => EditarFerramentaAsync(f.Nome)">editar</button>
-                                    <button class="config-link" @onclick="() => RemoverFerramentaAsync(f.Nome)">remover</button>
-                                </div>
-                            </div>
-                        }
-                        @if (!_criandoFerr && !_editandoFerramenta)
-                        {
-                            <button class="config-confiar" @onclick="IniciarCriacaoFerr">＋ Nova ferramenta</button>
-                        }
-                    </div>
-
-                    @if (_ferrVisualizando is not null)
-                    {
-                        <div class="config-grupo">
-                            <div class="cfg-row-cabecalho">
-                                <span class="config-grupo-titulo">@_ferrVisualizando.Nome</span>
-                                <button class="config-link" @onclick="() => _ferrVisualizando = null">fechar</button>
-                            </div>
-                            <pre class="cfg-textarea ferr-json-preview">@SerializarDefinicao(_ferrVisualizando)</pre>
-                        </div>
-                    }
-
-                    @if (_criandoFerr)
-                    {
-                        <div class="config-grupo">
-                            <span class="config-grupo-titulo">Nova ferramenta — converse com a Alina</span>
-                            <div class="hab-chat">
-                                <div class="hab-chat-log">
-                                    @if (_historicoFerr.Count == 0)
-                                    {
-                                        <span class="hab-chat-vazio">Descreva a ação que você quer automatizar — por exemplo, "abrir o terminal na pasta de um projeto" ou "rodar o deploy do Diário". A Alina pergunta o que faltar e monta o comando.</span>
-                                    }
-                                    @foreach (var m in _historicoFerr)
-                                    {
-                                        <div class="msg msg-@(m.Role == ChatRole.User ? "user" : "bot")">@m.Text</div>
-                                    }
-                                    @if (_gerandoFerr)
-                                    {
-                                        <div class="msg msg-bot msg-pending">pensando…</div>
-                                    }
-                                </div>
-
-                                @if (_rascunhoFerr is not null)
-                                {
-                                    <div class="hab-rascunho">
-                                        <span class="hab-rascunho-titulo">Rascunho: @_rascunhoFerr.Definicao.Nome</span>
-                                        <span class="hab-descricao">@_rascunhoFerr.Definicao.Descricao</span>
-                                        <pre class="cfg-textarea ferr-json-preview">@SerializarDefinicao(_rascunhoFerr.Definicao)</pre>
-                                        <div class="hab-rascunho-acoes">
-                                            <button class="cfg-salvar" @onclick="AprovarRascunhoFerr">Aprovar e editar</button>
-                                        </div>
-                                    </div>
-                                }
-
-                                <div class="hab-chat-composer">
-                                    <textarea class="config-campo hab-chat-campo" @bind="_inputFerr" @bind:event="oninput"
-                                              placeholder="Digite sua mensagem…" disabled="@_gerandoFerr"></textarea>
-                                    <button class="cfg-salvar" @onclick="EnviarMensagemFerrAsync"
-                                            disabled="@(_gerandoFerr || string.IsNullOrWhiteSpace(_inputFerr))">Enviar</button>
-                                </div>
-                                <div class="config-item config-item-acoes">
-                                    <button class="config-link" @onclick="PreencherManualmenteFerr">preencher manualmente</button>
-                                    <button class="cfg-cancelar" @onclick="() => _criandoFerr = false">Cancelar</button>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (_editandoFerramenta)
-                    {
-                        <div class="config-grupo">
-                            <span class="config-grupo-titulo">@(_ferrEhNova ? "Nova ferramenta" : $"Editando: {_ferrNomeOriginal}")</span>
-                            <span class="cfg-row-sub">Defina a ferramenta em JSON: nome, descricao, comando, argumentos (com {'{'}placeholders{'}'}), exigeConfirmacao e parametros.</span>
-                            <textarea class="cfg-textarea ferr-json-editor" @bind="_ferrJson" rows="14"
-                                      placeholder="JSON da ferramenta…"></textarea>
-                            @if (!string.IsNullOrEmpty(_ferrErro))
-                            {
-                                <span class="ferr-erro">@_ferrErro</span>
-                            }
-                            <div class="config-item config-item-acoes">
-                                <button class="cfg-cancelar" @onclick="() => _editandoFerramenta = false">Cancelar</button>
-                                <button class="cfg-salvar" @onclick="SalvarFerramentaAsync"
-                                        disabled="@string.IsNullOrWhiteSpace(_ferrJson)">
-                                    Salvar ferramenta
-                                </button>
-                            </div>
-                        </div>
-                    }
+                    <PainelFerramentas />
                 }
             </div>
 
@@ -663,57 +520,21 @@
     private AbaConfig _aba = AbaConfig.Geral;
     private ConfiguracoesApp _edicao = new();
     private bool _iniciarComWindows;
-    private string _modeloLlm = string.Empty;
+    private readonly Dictionary<PapelLlm, string> _selecaoPapel = [];
     private string _modeloClaudeCode = string.Empty;
-    private string _chaveLlm = string.Empty;
+    private string _chaveOpenAi = string.Empty;
     private PoliticaPermissaoOptions _permOpcoes = new();
     private string _novoDiretorio = string.Empty;
     private string _pastaDados = string.Empty;
     private PerfilPersonalidade _personalidade = new();
-
-    private List<HabilidadeResumo> _habilidades = new();
-    private bool _editandoHabilidade;
-    private bool _habEhNova;
-    private bool _habPreview;
-    private string _habNomeOriginal = string.Empty;
-    private string _habTitulo = string.Empty;
-    private string _habDescricao = string.Empty;
-    private string _habConteudo = string.Empty;
-
-    private Habilidade? _habVisualizando;
-    private bool _criandoHab;
-    private readonly List<ChatMessage> _historicoHab = new();
-    private string _inputHab = string.Empty;
-    private bool _gerandoHab;
-    private RascunhoHabilidade? _rascunhoHab;
-
-    private List<FerramentaResumo> _ferramentas = new();
-    private bool _editandoFerramenta;
-    private bool _ferrEhNova;
-    private string _ferrNomeOriginal = string.Empty;
-    private string _ferrJson = string.Empty;
-    private string _ferrErro = string.Empty;
-    private DefinicaoFerramenta? _ferrVisualizando;
-    private bool _criandoFerr;
-    private readonly List<ChatMessage> _historicoFerr = new();
-    private string _inputFerr = string.Empty;
-    private bool _gerandoFerr;
-    private RascunhoFerramenta? _rascunhoFerr;
-
-    private static readonly JsonSerializerOptions OpcoesJsonFerr = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
     private string RotuloMicrofone => Status.Current switch
     {
         AssistantState.Listening => "Parar de gravar",
-        AssistantState.Thinking or AssistantState.Executing => "Processando…",
-        AssistantState.Speaking => "Falando…",
+        AssistantState.Thinking or AssistantState.Executing => "Cancelar e falar",
+        AssistantState.Speaking => "Interromper e falar",
         _ => "Falar com a Alina (Ctrl+Espaço)",
     };
 
@@ -729,7 +550,8 @@
     private string DicaEstado => Status.Current switch
     {
         AssistantState.Listening => "toque de novo para enviar",
-        AssistantState.Executing => "rodando uma ferramenta",
+        AssistantState.Executing => "rodando uma ferramenta — toque para cancelar",
+        AssistantState.Thinking or AssistantState.Speaking => "pode cortar: toque no orbe ou fale",
         _ => "modo voz — Ctrl+Espaço de qualquer lugar",
     };
 
@@ -764,7 +586,28 @@
 
     private void AoAlterar() => InvokeAsync(StateHasChanged);
 
-    private void AoMudarStatus(object? sender, AssistantState state) => InvokeAsync(StateHasChanged);
+    private void AoMudarStatus(object? sender, AssistantState state)
+    {
+        FecharPendenciasJaRespondidas();
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Interromper um turno nega automaticamente o que estava aguardando confirmação;
+    /// sem isso, o overlay já resolvido continuaria na tela pedindo um clique inútil.
+    /// </summary>
+    private void FecharPendenciasJaRespondidas()
+    {
+        if (_confirmacaoPendente?.Resposta.IsCompleted == true)
+        {
+            _confirmacaoPendente = null;
+        }
+
+        if (_permissaoPendente?.Resposta.IsCompleted == true)
+        {
+            _permissaoPendente = null;
+        }
+    }
 
     private void AoNivelAudio(float nivel)
     {
@@ -872,354 +715,30 @@
             SegundosSilencioParaEncerrar = Config.Atual.SegundosSilencioParaEncerrar,
             ConversaContinua = Config.Atual.ConversaContinua,
             SegundosJanelaConversa = Config.Atual.SegundosJanelaConversa,
+            InterromperPorVoz = Config.Atual.InterromperPorVoz,
+            PalavrasInterrupcao = [.. Config.Atual.PalavrasInterrupcao],
             EscalaInterface = Config.Atual.EscalaInterface,
+            LembrarTamanhoJanela = Config.Atual.LembrarTamanhoJanela,
+            MostrarMiniPlayer = Config.Atual.MostrarMiniPlayer,
+            CantoMiniPlayer = Config.Atual.CantoMiniPlayer,
+            MiniPlayerMostraTexto = Config.Atual.MiniPlayerMostraTexto,
+            SegundosMiniPlayerVisivel = Config.Atual.SegundosMiniPlayerVisivel,
         };
         _iniciarComWindows = Config.IniciarComWindows;
-        _modeloLlm = ConfigLlm.ModeloAtual;
+        _selecaoPapel.Clear();
+        foreach (PapelLlmInfo papel in ConfigLlm.Papeis)
+        {
+            _selecaoPapel[papel.Papel] = ConfigLlm.SelecaoDe(papel.Papel);
+        }
+
         _modeloClaudeCode = ConfigClaudeCode.ModeloAtual;
-        _chaveLlm = string.Empty;
+        _chaveOpenAi = string.Empty;
         _permOpcoes = ClonarOpcoes(Politica.Opcoes);
         _novoDiretorio = string.Empty;
         _pastaDados = PastaDados.PastaAtual;
         _personalidade = await Personalidade.ObterAsync();
-        _editandoHabilidade = false;
-        await CarregarHabilidadesAsync();
-        _editandoFerramenta = false;
-        await CarregarFerramentasAsync();
         _aba = AbaConfig.Geral;
         _configAberta = true;
-    }
-
-    private async Task CarregarHabilidadesAsync()
-    {
-        _habilidades = (await Habilidades.ListarAsync()).ToList();
-        _criandoHab = false;
-        _habVisualizando = null;
-        _rascunhoHab = null;
-    }
-
-    private void NovaHabilidade()
-    {
-        _habEhNova = true;
-        _habNomeOriginal = string.Empty;
-        _habTitulo = string.Empty;
-        _habDescricao = string.Empty;
-        _habConteudo = string.Empty;
-        _habPreview = false;
-        _habVisualizando = null;
-        _criandoHab = false;
-        _editandoHabilidade = true;
-    }
-
-    private async Task EditarHabilidadeAsync(string nome)
-    {
-        Habilidade? habilidade = await Habilidades.ObterAsync(nome);
-        if (habilidade is null)
-        {
-            await CarregarHabilidadesAsync();
-            return;
-        }
-
-        _habEhNova = false;
-        _habNomeOriginal = habilidade.Nome;
-        _habTitulo = habilidade.Nome;
-        _habDescricao = habilidade.Descricao;
-        _habConteudo = habilidade.Conteudo;
-        _habPreview = false;
-        _habVisualizando = null;
-        _criandoHab = false;
-        _editandoHabilidade = true;
-    }
-
-    private async Task VisualizarHabilidadeAsync(string nome)
-    {
-        _habVisualizando = await Habilidades.ObterAsync(nome);
-        _criandoHab = false;
-        _editandoHabilidade = false;
-    }
-
-    private void FecharVisualizacao() => _habVisualizando = null;
-
-    private void IniciarCriacaoHab()
-    {
-        _criandoHab = true;
-        _editandoHabilidade = false;
-        _habVisualizando = null;
-        _historicoHab.Clear();
-        _rascunhoHab = null;
-        _inputHab = string.Empty;
-    }
-
-    private void CancelarCriacaoHab() => _criandoHab = false;
-
-    private void PreencherManualmente()
-    {
-        _criandoHab = false;
-        NovaHabilidade();
-    }
-
-    private async Task EnviarMensagemHabAsync()
-    {
-        string texto = _inputHab?.Trim() ?? string.Empty;
-        if (texto.Length == 0 || _gerandoHab)
-        {
-            return;
-        }
-
-        _historicoHab.Add(new ChatMessage(ChatRole.User, texto));
-        _inputHab = string.Empty;
-        _gerandoHab = true;
-        try
-        {
-            RespostaGeracao resposta = await GeradorHab.ContinuarAsync(_historicoHab);
-            _historicoHab.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
-            _rascunhoHab = resposta.Rascunho;
-        }
-        catch (Exception ex)
-        {
-            _historicoHab.Add(new ChatMessage(ChatRole.Assistant, $"[erro] {ex.Message}"));
-        }
-        finally
-        {
-            _gerandoHab = false;
-        }
-    }
-
-    private void AprovarRascunho()
-    {
-        if (_rascunhoHab is null)
-        {
-            return;
-        }
-
-        _habEhNova = true;
-        _habNomeOriginal = string.Empty;
-        _habTitulo = _rascunhoHab.Titulo;
-        _habDescricao = _rascunhoHab.Descricao;
-        _habConteudo = _rascunhoHab.Conteudo;
-        _habPreview = false;
-        _criandoHab = false;
-        _rascunhoHab = null;
-        _editandoHabilidade = true;
-    }
-
-    private async Task SalvarHabilidadeAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_habTitulo) || string.IsNullOrWhiteSpace(_habConteudo))
-        {
-            return;
-        }
-
-        var habilidade = new Habilidade
-        {
-            Nome = _habTitulo,
-            Descricao = _habDescricao?.Trim() ?? string.Empty,
-            Conteudo = _habConteudo,
-        };
-
-        await Habilidades.SalvarAsync(habilidade);
-
-        // Se o título foi renomeado a ponto de mudar o identificador, remove o arquivo antigo.
-        if (!_habEhNova
-            && !string.IsNullOrEmpty(_habNomeOriginal)
-            && !string.Equals(_habNomeOriginal, habilidade.Nome, StringComparison.OrdinalIgnoreCase))
-        {
-            await Habilidades.RemoverAsync(_habNomeOriginal);
-        }
-
-        _editandoHabilidade = false;
-        await CarregarHabilidadesAsync();
-    }
-
-    private async Task RemoverHabilidadeAsync(string nome)
-    {
-        await Habilidades.RemoverAsync(nome);
-        if (string.Equals(_habNomeOriginal, nome, StringComparison.OrdinalIgnoreCase))
-        {
-            _editandoHabilidade = false;
-        }
-
-        await CarregarHabilidadesAsync();
-    }
-
-    private static string SerializarDefinicao(DefinicaoFerramenta definicao)
-        => JsonSerializer.Serialize(definicao, OpcoesJsonFerr);
-
-    private async Task CarregarFerramentasAsync()
-    {
-        _ferramentas = (await Ferramentas.ListarAsync()).ToList();
-        _criandoFerr = false;
-        _ferrVisualizando = null;
-        _rascunhoFerr = null;
-    }
-
-    private void NovaFerramenta()
-    {
-        _ferrEhNova = true;
-        _ferrNomeOriginal = string.Empty;
-        _ferrErro = string.Empty;
-        _ferrJson = SerializarDefinicao(new DefinicaoFerramenta
-        {
-            Nome = "minha_ferramenta",
-            Descricao = "O que a ferramenta faz.",
-            ExigeConfirmacao = true,
-            Comando = "powershell",
-            Argumentos = ["-NoProfile", "-Command", "Write-Output '{texto}'"],
-            Parametros =
-            [
-                new ParametroFerramenta { Nome = "texto", Descricao = "Texto a exibir.", Obrigatorio = true },
-            ],
-        });
-        _ferrVisualizando = null;
-        _criandoFerr = false;
-        _editandoFerramenta = true;
-    }
-
-    private async Task EditarFerramentaAsync(string nome)
-    {
-        DefinicaoFerramenta? definicao = await Ferramentas.ObterAsync(nome);
-        if (definicao is null)
-        {
-            await CarregarFerramentasAsync();
-            return;
-        }
-
-        _ferrEhNova = false;
-        _ferrNomeOriginal = definicao.Nome;
-        _ferrJson = SerializarDefinicao(definicao);
-        _ferrErro = string.Empty;
-        _ferrVisualizando = null;
-        _criandoFerr = false;
-        _editandoFerramenta = true;
-    }
-
-    private async Task VisualizarFerramentaAsync(string nome)
-    {
-        _ferrVisualizando = await Ferramentas.ObterAsync(nome);
-        _criandoFerr = false;
-        _editandoFerramenta = false;
-    }
-
-    private void IniciarCriacaoFerr()
-    {
-        _criandoFerr = true;
-        _editandoFerramenta = false;
-        _ferrVisualizando = null;
-        _historicoFerr.Clear();
-        _rascunhoFerr = null;
-        _inputFerr = string.Empty;
-    }
-
-    private void PreencherManualmenteFerr()
-    {
-        _criandoFerr = false;
-        NovaFerramenta();
-    }
-
-    private async Task EnviarMensagemFerrAsync()
-    {
-        string texto = _inputFerr?.Trim() ?? string.Empty;
-        if (texto.Length == 0 || _gerandoFerr)
-        {
-            return;
-        }
-
-        _historicoFerr.Add(new ChatMessage(ChatRole.User, texto));
-        _inputFerr = string.Empty;
-        _gerandoFerr = true;
-        try
-        {
-            RespostaGeracaoFerramenta resposta = await GeradorFerr.ContinuarAsync(_historicoFerr);
-            _historicoFerr.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
-            _rascunhoFerr = resposta.Rascunho;
-        }
-        catch (Exception ex)
-        {
-            _historicoFerr.Add(new ChatMessage(ChatRole.Assistant, $"[erro] {ex.Message}"));
-        }
-        finally
-        {
-            _gerandoFerr = false;
-        }
-    }
-
-    private void AprovarRascunhoFerr()
-    {
-        if (_rascunhoFerr is null)
-        {
-            return;
-        }
-
-        _ferrEhNova = true;
-        _ferrNomeOriginal = string.Empty;
-        _ferrJson = SerializarDefinicao(_rascunhoFerr.Definicao);
-        _ferrErro = string.Empty;
-        _criandoFerr = false;
-        _rascunhoFerr = null;
-        _editandoFerramenta = true;
-    }
-
-    private async Task SalvarFerramentaAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_ferrJson))
-        {
-            return;
-        }
-
-        DefinicaoFerramenta? definicao;
-        try
-        {
-            definicao = JsonSerializer.Deserialize<DefinicaoFerramenta>(_ferrJson, OpcoesJsonFerr);
-        }
-        catch (JsonException ex)
-        {
-            _ferrErro = $"JSON inválido: {ex.Message}";
-            return;
-        }
-
-        if (definicao is null || string.IsNullOrWhiteSpace(definicao.Nome) || string.IsNullOrWhiteSpace(definicao.Comando))
-        {
-            _ferrErro = "Informe ao menos 'nome' e 'comando'.";
-            return;
-        }
-
-        await Ferramentas.SalvarAsync(definicao);
-
-        if (!_ferrEhNova
-            && !string.IsNullOrEmpty(_ferrNomeOriginal)
-            && !string.Equals(_ferrNomeOriginal, definicao.Nome, StringComparison.OrdinalIgnoreCase))
-        {
-            await Ferramentas.RemoverAsync(_ferrNomeOriginal);
-        }
-
-        _editandoFerramenta = false;
-        _ferrErro = string.Empty;
-        await CarregarFerramentasAsync();
-    }
-
-    private async Task RemoverFerramentaAsync(string nome)
-    {
-        await Ferramentas.RemoverAsync(nome);
-        if (string.Equals(_ferrNomeOriginal, nome, StringComparison.OrdinalIgnoreCase))
-        {
-            _editandoFerramenta = false;
-        }
-
-        await CarregarFerramentasAsync();
-    }
-
-    private async Task AlternarConfirmacaoAsync(string nome)
-    {
-        DefinicaoFerramenta? definicao = await Ferramentas.ObterAsync(nome);
-        if (definicao is null)
-        {
-            await CarregarFerramentasAsync();
-            return;
-        }
-
-        definicao.ExigeConfirmacao = !definicao.ExigeConfirmacao;
-        await Ferramentas.SalvarAsync(definicao);
-        await CarregarFerramentasAsync();
     }
 
     private async Task FecharConfiguracoes()
@@ -1233,6 +752,26 @@
         _edicao.EscalaInterface = escala;
         await AplicarEscalaAsync(escala);
     }
+
+    private string TamanhoJanelaMemorizado()
+    {
+        List<string> partes = [];
+        if (Config.Atual.JanelaCompacta is TamanhoJanela compacta)
+        {
+            partes.Add($"Compacto {compacta.Largura:0} × {compacta.Altura:0}");
+        }
+
+        if (Config.Atual.JanelaDetalhada is TamanhoJanela detalhada)
+        {
+            partes.Add($"Detalhado {detalhada.Largura:0} × {detalhada.Altura:0}");
+        }
+
+        return partes.Count == 0
+            ? "Nada memorizado ainda — redimensione a janela e ela guarda o tamanho."
+            : string.Join(" · ", partes);
+    }
+
+    private void RestaurarTamanhoJanela() => Config.EsquecerTamanhoJanela();
 
     private async Task AplicarEscalaAsync(double escala)
     {
@@ -1324,22 +863,25 @@
         System.Windows.Application.Current?.Shutdown();
     }
 
+    private string RotuloDe(string selecao)
+    {
+        ModeloLlm? modelo = ConfigLlm.ModelosDisponiveis.FirstOrDefault(m => m.Selecao == selecao);
+        return modelo?.Rotulo ?? selecao;
+    }
+
     private void SalvarLlm()
     {
-        ConfigLlm.Salvar(_modeloLlm, _chaveLlm);
+        ConfigLlm.Salvar(_selecaoPapel, _chaveOpenAi);
 
-        // Aplica modelo/chave ao cérebro em runtime. Sem chave não há o que reconfigurar;
-        // se a chave for inválida, mantém o cliente anterior (o erro aparece ao conversar).
-        if (ConfigLlm.ChaveDefinida)
+        // Aplica modelo/chave aos clientes já criados. Um papel que não puder ser recriado
+        // mantém o cliente anterior; se a chave for inválida, o erro aparece ao conversar.
+        try
         {
-            try
-            {
-                Reconfig.Reconfigurar(ConfigLlm.MontarOpcoesEfetivas());
-            }
-            catch
-            {
-                // ignora: o cliente anterior segue válido
-            }
+            ClientesLlm.Reconfigurar();
+        }
+        catch
+        {
+            // ignora: os clientes anteriores seguem válidos
         }
     }
 

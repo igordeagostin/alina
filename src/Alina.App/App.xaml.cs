@@ -45,6 +45,9 @@ public partial class App : System.Windows.Application
 
         _tray = new TrayIconController(_window, services.GetRequiredService<ShellUiState>(), Encerrar);
 
+        // O mini player só entra em cena com a janela oculta, então precisa conhecê-la.
+        services.GetRequiredService<MiniPlayerController>().Vincular(_window);
+
         // Iniciada com o Windows (--tray) começa apenas na bandeja.
         if (!e.Args.Contains("--tray"))
         {

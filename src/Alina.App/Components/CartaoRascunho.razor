@@ -1,0 +1,23 @@
+@* Proposta da Alina (habilidade ou ferramenta) aguardando revisão do usuário. *@
+
+<div class="cat-rascunho">
+    <span class="cat-rascunho-titulo">@Titulo</span>
+    @if (!string.IsNullOrWhiteSpace(Descricao))
+    {
+        <span class="cat-item-descricao">@Descricao</span>
+    }
+    @ChildContent
+    <div class="cat-acoes">
+        <button class="config-link" @onclick="Revisar">revisar o texto</button>
+        <button class="cfg-salvar" @onclick="Aplicar">@RotuloAplicar</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Titulo { get; set; } = string.Empty;
+    [Parameter] public string Descricao { get; set; } = string.Empty;
+    [Parameter] public string RotuloAplicar { get; set; } = "Salvar";
+    [Parameter] public EventCallback Revisar { get; set; }
+    [Parameter] public EventCallback Aplicar { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

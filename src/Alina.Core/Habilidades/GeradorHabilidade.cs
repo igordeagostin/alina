@@ -10,24 +10,50 @@ namespace Alina.Core.Habilidades;
 /// ferramentas (para ele não sair executando nada durante o planejamento) e pede
 /// a resposta em JSON, separando a fala da Alina do rascunho proposto. Para que a
 /// Alina "enxergue" os projetos sem executar nada, a árvore dos diretórios
-/// confiáveis é injetada no contexto a cada turno.
+/// confiáveis é injetada no contexto a cada turno. Quando há uma habilidade em
+/// contexto, a mesma conversa vira edição ou treino do documento existente.
 /// </summary>
 public sealed class GeradorHabilidade : IGeradorHabilidade
 {
-    private const string InstrucaoSistema =
+    private const string FormatoResposta =
+        "Responda SEMPRE apenas com um objeto JSON (sem texto fora dele e sem cercas de código) com os campos:\n" +
+        "- \"mensagem\": o que dizer ao usuário no chat (pergunta ou, ao propor, um resumo curto do que mudou e o convite para revisar). Nunca coloque o Markdown completo aqui.\n" +
+        "- \"pronto\": true quando estiver propondo a habilidade; false enquanto ainda coleta informação.\n" +
+        "- \"titulo\": título curto da habilidade (só quando pronto=true).\n" +
+        "- \"descricao\": uma linha que descreve a habilidade, para um índice (só quando pronto=true).\n" +
+        "- \"conteudo\": o documento completo em Markdown, bem estruturado (títulos, passos, blocos de código " +
+        "quando fizer sentido), escrito como instruções para o seu \"eu futuro\" executar a tarefa (só quando pronto=true).";
+
+    private const string InstrucaoCriacao =
         "Você é a Alina ajudando o usuário a criar uma nova \"habilidade\": um documento em " +
         "Markdown que você mesma vai consultar depois, quando a tarefa for relevante. " +
         "Pense como no \"modo de planejamento\": converse em português do Brasil, de forma direta e sem " +
         "bajulação, e faça perguntas objetivas só quando faltar algo essencial (o que a habilidade faz, " +
         "quando aplicá-la, comandos, caminhos, convenções). Uma pergunta de cada vez.\n\n" +
         "Assim que tiver o suficiente, PROPONHA a habilidade em vez de seguir perguntando.\n\n" +
-        "Responda SEMPRE apenas com um objeto JSON (sem texto fora dele e sem cercas de código) com os campos:\n" +
-        "- \"mensagem\": o que dizer ao usuário no chat (pergunta ou, ao propor, um resumo curto e o convite para revisar). Nunca coloque o Markdown completo aqui.\n" +
-        "- \"pronto\": true quando estiver propondo a habilidade; false enquanto ainda coleta informação.\n" +
-        "- \"titulo\": título curto da habilidade (só quando pronto=true).\n" +
-        "- \"descricao\": uma linha que descreve a habilidade, para um índice (só quando pronto=true).\n" +
-        "- \"conteudo\": o documento completo em Markdown, bem estruturado (títulos, passos, blocos de código " +
-        "quando fizer sentido), escrito como instruções para o seu \"eu futuro\" executar a tarefa (só quando pronto=true).";
+        FormatoResposta;
+
+    private const string InstrucaoEdicao =
+        "Você é a Alina ajudando o usuário a editar uma \"habilidade\" que já existe: um documento em " +
+        "Markdown que você mesma consulta quando a tarefa for relevante. O documento atual vem logo a seguir.\n\n" +
+        "Converse em português do Brasil, de forma direta e sem bajulação, e pergunte só o que for " +
+        "essencial para aplicar a mudança. Uma pergunta de cada vez. Assim que entender o pedido, " +
+        "PROPONHA a versão revisada em vez de seguir perguntando.\n\n" +
+        "Devolva sempre o documento inteiro em \"conteudo\", preservando literalmente tudo o que o usuário " +
+        "não pediu para mudar. Mantenha o título e a descrição atuais, a não ser que o pedido implique trocá-los.\n\n" +
+        FormatoResposta;
+
+    private const string InstrucaoTreino =
+        "Você é a Alina treinando uma \"habilidade\" que já existe: o usuário executa a habilidade de " +
+        "verdade, traz o que aconteceu e diz o que ficou errado ou faltou. O documento atual vem logo a seguir.\n\n" +
+        "No histórico, as mensagens que começam com \"[teste]\" são o pedido que foi executado e as que " +
+        "começam com \"[resultado]\" são a resposta que você deu naquela execução. Trate-as como evidência: " +
+        "encontre o trecho do documento que levou ao erro (passo faltando, comando errado, caminho inválido, " +
+        "gatilho mal descrito) e corrija exatamente esse ponto.\n\n" +
+        "Converse em português do Brasil, direta e sem bajulação. Quando a orientação do usuário for clara, " +
+        "PROPONHA a versão corrigida em vez de perguntar. Devolva sempre o documento inteiro em \"conteudo\", " +
+        "preservando o que já funciona.\n\n" +
+        FormatoResposta;
 
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
@@ -41,12 +67,19 @@ public sealed class GeradorHabilidade : IGeradorHabilidade
     }
 
     public async Task<RespostaGeracao> ContinuarAsync(
-        IReadOnlyList<ChatMessage> historico, CancellationToken cancellationToken = default)
+        IReadOnlyList<ChatMessage> historico,
+        ContextoHabilidade? contexto = null,
+        CancellationToken cancellationToken = default)
     {
-        List<ChatMessage> request = new List<ChatMessage>(historico.Count + 2)
+        List<ChatMessage> request = new List<ChatMessage>(historico.Count + 3)
         {
-            new(ChatRole.System, InstrucaoSistema),
+            new(ChatRole.System, InstrucaoDe(contexto)),
         };
+
+        if (contexto is not null)
+        {
+            request.Add(new(ChatRole.System, MontarContextoHabilidade(contexto.Atual)));
+        }
 
         string? contextoDiretorios = MontarContextoDiretorios();
         if (contextoDiretorios is not null)
@@ -81,6 +114,17 @@ public sealed class GeradorHabilidade : IGeradorHabilidade
 
         return new RespostaGeracao(mensagem, rascunho);
     }
+
+    private static string InstrucaoDe(ContextoHabilidade? contexto) => contexto?.Modo switch
+    {
+        ModoConversaHabilidade.Edicao => InstrucaoEdicao,
+        ModoConversaHabilidade.Treino => InstrucaoTreino,
+        _ => InstrucaoCriacao,
+    };
+
+    private static string MontarContextoHabilidade(Habilidade atual) =>
+        "Habilidade atual, exatamente como está salva. É esta que você está revisando:\n\n" +
+        $"titulo: {atual.Nome}\ndescricao: {atual.Descricao}\n\n---\n{atual.Conteudo}";
 
     private string? MontarContextoDiretorios()
     {

@@ -10,11 +10,12 @@ namespace Alina.Core.Ferramentas;
 /// Gerador conversacional de ferramenta. Conversa com o LLM sem ferramentas (para
 /// ele planejar sem sair executando) e pede a resposta em JSON, separando a fala da
 /// Alina do rascunho proposto. A árvore dos diretórios confiáveis é injetada para a
-/// Alina montar caminhos reais sem precisar perguntar.
+/// Alina montar caminhos reais sem precisar perguntar. Quando há uma ferramenta em
+/// contexto, a mesma conversa vira edição da definição existente.
 /// </summary>
 public sealed class GeradorFerramenta : IGeradorFerramenta
 {
-    private const string InstrucaoSistema =
+    private const string InstrucaoCriacao =
         "Você é a Alina ajudando o usuário a criar uma nova \"ferramenta\": um comando externo que você " +
         "passará a expor a si mesma como uma ação chamável (function-calling), sem novo build do app. " +
         "Diferente de uma \"habilidade\" (que é só um documento que você lê), uma ferramenta EXECUTA um " +
@@ -23,6 +24,19 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
         "faça perguntas objetivas só quando faltar algo essencial (o que a ferramenta faz, qual comando/executável, " +
         "quais parâmetros o modelo preenche, se é perigosa a ponto de exigir confirmação). Uma pergunta por vez.\n\n" +
         "Assim que tiver o suficiente, PROPONHA a ferramenta em vez de seguir perguntando.\n\n" +
+        RegrasEFormato;
+
+    private const string InstrucaoEdicao =
+        "Você é a Alina ajudando o usuário a editar uma \"ferramenta\" que já existe: um comando externo " +
+        "que você expõe a si mesma como ação chamável (function-calling). A definição atual vem logo a seguir.\n\n" +
+        "Converse em português do Brasil, direta e sem bajulação, e pergunte só o que for essencial para " +
+        "aplicar a mudança. Uma pergunta por vez. Assim que entender o pedido, PROPONHA a definição revisada " +
+        "em vez de seguir perguntando.\n\n" +
+        "Devolva sempre a definição inteira, preservando os campos que o usuário não pediu para mudar " +
+        "(inclusive o nome, a não ser que o pedido implique renomear).\n\n" +
+        RegrasEFormato;
+
+    private const string RegrasEFormato =
         "Regras da definição:\n" +
         "- Os argumentos usam placeholders {parametro} que serão substituídos pelos valores informados na hora.\n" +
         "- Cada placeholder usado deve ter um parâmetro correspondente na lista.\n" +
@@ -45,6 +59,12 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
 
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
+    private static readonly JsonSerializerOptions OpcoesContexto = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     private readonly IChatClient _client;
     private readonly IPoliticaPermissao? _politica;
 
@@ -55,12 +75,19 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
     }
 
     public async Task<RespostaGeracaoFerramenta> ContinuarAsync(
-        IReadOnlyList<ChatMessage> historico, CancellationToken cancellationToken = default)
+        IReadOnlyList<ChatMessage> historico,
+        ContextoFerramenta? contexto = null,
+        CancellationToken cancellationToken = default)
     {
-        List<ChatMessage> request = new List<ChatMessage>(historico.Count + 2)
+        List<ChatMessage> request = new List<ChatMessage>(historico.Count + 3)
         {
-            new(ChatRole.System, InstrucaoSistema),
+            new(ChatRole.System, contexto is null ? InstrucaoCriacao : InstrucaoEdicao),
         };
+
+        if (contexto is not null)
+        {
+            request.Add(new(ChatRole.System, MontarContextoFerramenta(contexto.Atual)));
+        }
 
         string? contextoDiretorios = MontarContextoDiretorios();
         if (contextoDiretorios is not null)
@@ -114,6 +141,10 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
             })
             .ToList(),
     };
+
+    private static string MontarContextoFerramenta(DefinicaoFerramenta atual) =>
+        "Ferramenta atual, exatamente como está salva. É esta que você está revisando:\n\n" +
+        JsonSerializer.Serialize(atual, OpcoesContexto);
 
     private string? MontarContextoDiretorios()
     {

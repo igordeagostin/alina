@@ -1,36 +1,32 @@
-using Alina.Infrastructure.Configuration;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 
 namespace Alina.Infrastructure.Llm;
 
 /// <summary>
-/// <see cref="IChatClient"/> que permite trocar modelo, provedor e chave em runtime
-/// (pela tela de configurações) sem reiniciar o app. Delega para um cliente interno
-/// reconstruído a cada <see cref="Reconfigurar"/>; a troca só vale entre turnos.
+/// Fachada de <see cref="IChatClient"/> cujo cliente interno pode ser trocado em runtime
+/// (pela tela de configurações) sem reiniciar o app. Como a referência da fachada não muda,
+/// quem já a recebeu por injeção passa a usar o novo cliente sozinho; a troca só vale
+/// entre turnos. Quem constrói o cliente interno é o chamador — pode vir do
+/// <see cref="LlmClientFactory"/> ou de qualquer outra origem, como o CLI do Claude Code.
 /// </summary>
 public sealed class ReconfigurableChatClient : IChatClient
 {
-    private readonly ILoggerFactory _loggerFactory;
     private readonly Lock _sync = new();
     private IChatClient _inner;
 
-    public ReconfigurableChatClient(LlmOptions options, ILoggerFactory loggerFactory)
-    {
-        _loggerFactory = loggerFactory;
-        _inner = LlmClientFactory.Create(options, loggerFactory);
-    }
+    public ReconfigurableChatClient(IChatClient inicial) => _inner = inicial;
 
-    /// <summary>
-    /// Reconstrói o cliente interno com as novas opções. Se a construção falhar
-    /// (ex.: chave inválida), lança e mantém o cliente anterior intacto.
-    /// </summary>
-    public void Reconfigurar(LlmOptions options)
+    /// <summary>Assume o novo cliente e descarta o anterior.</summary>
+    public void Reconfigurar(IChatClient novo)
     {
-        IChatClient novo = LlmClientFactory.Create(options, _loggerFactory);
         IChatClient antigo;
         lock (_sync)
         {
+            if (ReferenceEquals(novo, _inner))
+            {
+                return;
+            }
+
             antigo = _inner;
             _inner = novo;
         }

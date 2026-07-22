@@ -51,6 +51,21 @@ public sealed class VoiceOptions
     public string[] PalavrasAtivacao { get; set; } = ["alina", "aline", "malina", "adelina", "elina"];
 
     /// <summary>
+    /// Permite cortar a Alina no meio: enquanto ela pensa ou fala, o microfone segue
+    /// escutando e dizer o nome dela (ou uma das <see cref="PalavrasInterrupcao"/>)
+    /// cancela o turno na hora, abrindo espaço para a nova orientação. Funciona melhor
+    /// com fones de ouvido — em caixas de som a própria fala pode se autointerromper.
+    /// </summary>
+    public bool InterromperPorVoz { get; set; } = true;
+
+    /// <summary>
+    /// Termos que interrompem a Alina enquanto ela pensa ou fala. Entram na gramática
+    /// restrita do reconhecedor local, junto das <see cref="PalavrasAtivacao"/>. Evite
+    /// palavras comuns em respostas ("para", "não") para não gerar cortes acidentais.
+    /// </summary>
+    public string[] PalavrasInterrupcao { get; set; } = ["espera", "espere", "chega", "cancela", "esquece"];
+
+    /// <summary>
     /// Silêncio (em segundos) que encerra automaticamente a gravação depois que o
     /// usuário falou, mandando processar sem precisar de clique. Valor menor ou
     /// igual a zero desliga o corte automático (encerra só pelo orbe/hotkey).

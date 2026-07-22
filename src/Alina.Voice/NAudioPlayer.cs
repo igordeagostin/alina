@@ -7,7 +7,7 @@ public sealed class NAudioPlayer : IAudioPlayer
 {
     public async Task PlayMp3Async(byte[] mp3Audio, CancellationToken cancellationToken = default)
     {
-        if (mp3Audio.Length == 0)
+        if (mp3Audio.Length == 0 || cancellationToken.IsCancellationRequested)
         {
             return;
         }

@@ -16,6 +16,12 @@ public static class LlmClientFactory
 {
     public static IChatClient Create(LlmOptions options, ILoggerFactory loggerFactory)
     {
+        if (options.Provider == LlmProvider.ClaudeCode)
+        {
+            throw new InvalidOperationException(
+                "O provedor Claude Code não usa a API: o cliente é criado pela camada de UI, sobre o CLI.");
+        }
+
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
             throw new InvalidOperationException(
@@ -52,26 +58,30 @@ public static class LlmClientFactory
     /// </summary>
     public static IEmbeddingGenerator<string, Embedding<float>>? CreateEmbeddingGenerator(LlmOptions options)
     {
+        string? chave = string.IsNullOrWhiteSpace(options.EmbeddingApiKey)
+            ? (options.Provider == LlmProvider.OpenAI ? options.ApiKey : null)
+            : options.EmbeddingApiKey;
+
         if (!options.EmbeddingsEnabled
-            || string.IsNullOrWhiteSpace(options.ApiKey)
-            || string.IsNullOrWhiteSpace(options.EmbeddingModel)
-            || options.Provider != LlmProvider.OpenAI)
+            || string.IsNullOrWhiteSpace(chave)
+            || string.IsNullOrWhiteSpace(options.EmbeddingModel))
         {
             return null;
         }
 
-        return CreateOpenAIClient(options).GetEmbeddingClient(options.EmbeddingModel).AsIEmbeddingGenerator();
+        return CreateOpenAIClient(options, chave!).GetEmbeddingClient(options.EmbeddingModel).AsIEmbeddingGenerator();
     }
 
     private static IChatClient CreateOpenAI(LlmOptions options)
-        => CreateOpenAIClient(options).GetChatClient(options.Model).AsIChatClient();
+        => CreateOpenAIClient(options, options.ApiKey!).GetChatClient(options.Model).AsIChatClient();
 
-    private static OpenAIClient CreateOpenAIClient(LlmOptions options)
+    private static OpenAIClient CreateOpenAIClient(LlmOptions options, string chave)
     {
-        ApiKeyCredential credential = new ApiKeyCredential(options.ApiKey!);
+        ApiKeyCredential credential = new ApiKeyCredential(chave);
+        string? endpoint = options.Provider == LlmProvider.OpenAI ? options.Endpoint : null;
 
-        return string.IsNullOrWhiteSpace(options.Endpoint)
+        return string.IsNullOrWhiteSpace(endpoint)
             ? new OpenAIClient(credential)
-            : new OpenAIClient(credential, new OpenAIClientOptions { Endpoint = new Uri(options.Endpoint!) });
+            : new OpenAIClient(credential, new OpenAIClientOptions { Endpoint = new Uri(endpoint!) });
     }
 }

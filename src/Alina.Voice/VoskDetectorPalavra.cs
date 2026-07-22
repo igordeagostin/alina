@@ -25,6 +25,7 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
     private volatile bool _podeDisparar;
 
     public event Action? PalavraDetectada;
+    public event Action? InterrupcaoDetectada;
     public event Action<Exception>? Falhou;
 
     public VoskDetectorPalavra(VoiceOptions opcoes) => _opcoes = opcoes;
@@ -120,11 +121,24 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
         {
             bool completo = reconhecedor.AcceptWaveform(e.Buffer, e.BytesRecorded);
             string texto = ExtrairTexto(completo ? reconhecedor.Result() : reconhecedor.PartialResult(), completo);
-            if (ContemPalavra(texto))
+
+            bool ativacao = ContemAlguma(texto, _opcoes.PalavrasAtivacao);
+            bool interrupcao = !ativacao && ContemAlguma(texto, _opcoes.PalavrasInterrupcao);
+            if (!ativacao && !interrupcao)
             {
-                _podeDisparar = false;
-                reconhecedor.Reset();
+                return;
+            }
+
+            _podeDisparar = false;
+            reconhecedor.Reset();
+
+            if (ativacao)
+            {
                 PalavraDetectada?.Invoke();
+            }
+            else
+            {
+                InterrupcaoDetectada?.Invoke();
             }
         }
         catch (Exception ex)
@@ -144,6 +158,7 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
     private string MontarGramatica()
     {
         IEnumerable<string> frases = _opcoes.PalavrasAtivacao
+            .Concat(_opcoes.PalavrasInterrupcao)
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim().ToLowerInvariant())
             .Distinct()
@@ -152,16 +167,16 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
         return JsonSerializer.Serialize(frases);
     }
 
-    private bool ContemPalavra(string texto)
+    private static bool ContemAlguma(string texto, IEnumerable<string> palavras)
     {
         if (texto.Length == 0)
         {
             return false;
         }
 
-        foreach (string palavra in _opcoes.PalavrasAtivacao)
+        foreach (string palavra in palavras)
         {
-            if (texto.Contains(palavra, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(palavra) && texto.Contains(palavra, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

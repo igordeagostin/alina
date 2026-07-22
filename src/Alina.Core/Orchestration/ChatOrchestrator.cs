@@ -104,6 +104,17 @@ public sealed class ChatOrchestrator : IOrchestrator
         return response.Text;
     }
 
+    public void RegistrarNota(string nota)
+    {
+        if (string.IsNullOrWhiteSpace(nota))
+        {
+            return;
+        }
+
+        _current.Messages.Add(new ChatMessage(ChatRole.User, $"[nota do sistema] {nota}"));
+        _current.UpdatedAt = DateTimeOffset.Now;
+    }
+
     public async Task<string> SummarizeConversationAsync(CancellationToken cancellationToken = default)
     {
         if (_current.Messages.Count == 0)
