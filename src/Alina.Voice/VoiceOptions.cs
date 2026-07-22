@@ -17,6 +17,16 @@ public sealed class VoiceOptions
     /// <summary>Idioma esperado na transcrição (ISO-639-1), melhora a acurácia. Ex: "pt".</summary>
     public string Language { get; set; } = "pt";
 
+    /// <summary>
+    /// Dica de contexto passada ao modelo de transcrição para enviesar o reconhecimento
+    /// do vocabulário técnico (evita trocas como "API" → "aqui"). Deve ser uma frase no
+    /// mesmo idioma e estilo do que costuma ser dito. Vazio desliga a dica.
+    /// </summary>
+    public string PromptTranscricao { get; set; } =
+        "Comandos de voz para uma assistente de desenvolvimento de software. Vocabulário " +
+        "técnico frequente: API, VS Code, deploy, endpoint, commit, branch, pull request, " +
+        "front-end, back-end, banco de dados, build, log, token.";
+
     /// <summary>Modelo de síntese de fala (TTS). Ex: "gpt-4o-mini-tts" ou "tts-1".</summary>
     public string TtsModel { get; set; } = "gpt-4o-mini-tts";
 

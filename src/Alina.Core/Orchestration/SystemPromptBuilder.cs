@@ -81,9 +81,11 @@ public static class SystemPromptBuilder
         if (habilidades is { Count: > 0 })
         {
             sb.AppendLine();
-            sb.AppendLine("Habilidades que você aprendeu (nome — descrição). Quando uma delas for relevante " +
-                          "para o pedido, chame a ferramenta 'usar_habilidade' com o nome para carregar as " +
-                          "instruções completas antes de agir:");
+            sb.AppendLine("Habilidades que você aprendeu (nome — descrição). Se o pedido casar com uma delas, " +
+                          "você DEVE chamar a ferramenta 'usar_habilidade' com o nome e seguir as instruções " +
+                          "carregadas ANTES de chamar qualquer outra ferramenta. Não resolva por conta própria " +
+                          "(caminhos, comandos, nomes, regras de correspondência) aquilo que a habilidade já " +
+                          "define — carregue-a primeiro, mesmo que a tarefa pareça óbvia:");
             foreach (HabilidadeResumo habilidade in habilidades)
             {
                 sb.AppendLine($"- {habilidade.Nome} — {habilidade.Descricao}");

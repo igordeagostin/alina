@@ -26,6 +26,11 @@ public sealed class OpenAISpeechToText : ISpeechToText
             options.Language = _options.Language;
         }
 
+        if (!string.IsNullOrWhiteSpace(_options.PromptTranscricao))
+        {
+            options.Prompt = _options.PromptTranscricao;
+        }
+
         ClientResult<AudioTranscription> result = await _client.TranscribeAudioAsync(stream, "audio.wav", options, cancellationToken);
         return result.Value.Text?.Trim() ?? string.Empty;
     }
