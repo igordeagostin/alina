@@ -17,6 +17,7 @@
 @inject UiConfirmacaoPermissao ConfirmacaoPermissao
 @inject IPoliticaPermissao Politica
 @inject SeletorPasta SeletorPasta
+@inject PastaDadosService PastaDados
 @inject ConfiguracoesService Config
 @inject IHabilidadeStore Habilidades
 @inject IGeradorHabilidade GeradorHab
@@ -109,6 +110,17 @@
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.AbrirEmModoCompacto" />
                         </label>
+                    </div>
+
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row--empilhado">
+                            <span class="cfg-row-titulo">Pasta de dados</span>
+                            <div class="cfg-voz">
+                                <input class="cfg-campo" @bind="_pastaDados" placeholder="@PastaDados.PastaAtual" />
+                                <button class="cfg-voz-ouvir" @onclick="EscolherPastaDados">Escolher…</button>
+                            </div>
+                            <span class="cfg-row-sub">Onde a Alina guarda memória, conversas, habilidades e preferências. Ao mudar, o conteúdo atual é movido para o novo local e a Alina reinicia para aplicar.</span>
+                        </div>
                     </div>
                 }
 
@@ -499,6 +511,7 @@
     private string _chaveLlm = string.Empty;
     private PoliticaPermissaoOptions _permOpcoes = new();
     private string _novoDiretorio = string.Empty;
+    private string _pastaDados = string.Empty;
 
     private List<HabilidadeResumo> _habilidades = new();
     private bool _editandoHabilidade;
@@ -643,6 +656,15 @@
         }
     }
 
+    private void EscolherPastaDados()
+    {
+        string? pasta = SeletorPasta.Escolher(_pastaDados);
+        if (!string.IsNullOrWhiteSpace(pasta))
+        {
+            _pastaDados = pasta;
+        }
+    }
+
     private void RemoverRegra(string id) => Politica.RemoverRegra(id);
 
     private static PoliticaPermissaoOptions ClonarOpcoes(PoliticaPermissaoOptions o) => new()
@@ -678,6 +700,7 @@
         _chaveLlm = string.Empty;
         _permOpcoes = ClonarOpcoes(Politica.Opcoes);
         _novoDiretorio = string.Empty;
+        _pastaDados = PastaDados.PastaAtual;
         _editandoHabilidade = false;
         await CarregarHabilidadesAsync();
         _aba = AbaConfig.Geral;
@@ -905,6 +928,39 @@
         SalvarLlm();
         ConfigClaudeCode.Salvar(_modeloClaudeCode);
         _configAberta = false;
+
+        AplicarPastaDados();
+    }
+
+    private void AplicarPastaDados()
+    {
+        string escolhida = _pastaDados.Trim();
+        if (escolhida.Length == 0 ||
+            string.Equals(System.IO.Path.GetFullPath(escolhida), System.IO.Path.GetFullPath(PastaDados.PastaAtual), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            PastaDados.Mover(escolhida);
+            ReiniciarApp();
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            // Mantém a pasta anterior se a movimentação falhar (arquivo em uso, permissão, etc.).
+        }
+    }
+
+    private static void ReiniciarApp()
+    {
+        string? executavel = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(executavel))
+        {
+            System.Diagnostics.Process.Start(executavel);
+        }
+
+        System.Windows.Application.Current?.Shutdown();
     }
 
     private void SalvarLlm()

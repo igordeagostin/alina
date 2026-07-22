@@ -45,6 +45,12 @@ public static class Composition
         // Núcleo (LLM, memória, orquestrador)
         builder.Services.AddAlina(builder.Configuration);
 
+        // Pasta de dados escolhida pelo usuário (ponteiro fixo em %APPDATA%/Alina/local.json).
+        // Sobrepõe o StorageOptions do appsettings antes de qualquer store resolver o caminho.
+        builder.Services.AddSingleton<PastaDadosService>();
+        builder.Services.AddOptions<StorageOptions>()
+            .PostConfigure<PastaDadosService>((opcoes, pasta) => pasta.AplicarEm(opcoes));
+
         // Preferências de LLM ajustáveis pela UI (modelo + chave da API, guardada
         // criptografada e fora do repositório). Sobrepõem o appsettings/user-secrets,
         // então a voz e o cérebro já usam esses valores no arranque.
