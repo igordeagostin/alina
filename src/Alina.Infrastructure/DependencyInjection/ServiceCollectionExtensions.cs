@@ -3,6 +3,7 @@ using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Orchestration;
 using Alina.Core.Permissoes;
+using Alina.Core.Personalidade;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
 using Alina.Infrastructure.Ferramentas;
@@ -10,6 +11,7 @@ using Alina.Infrastructure.Habilidades;
 using Alina.Infrastructure.Llm;
 using Alina.Infrastructure.Memory;
 using Alina.Infrastructure.Permissoes;
+using Alina.Infrastructure.Personalidade;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +39,11 @@ public static class ServiceCollectionExtensions
             new FileProfileStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value.ResolvePreferencesFile()));
         services.AddSingleton<IMemoryStore>(sp =>
             new JsonMemoryStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
+
+        // Personalidade: eixos de comportamento + orientações livres do usuário, relidos
+        // a cada turno para valer sem reiniciar.
+        services.AddSingleton<IPersonalidadeStore>(sp =>
+            new FilePersonalidadeStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
 
         // Habilidades: cada uma um arquivo Markdown numa pasta dedicada (índice no
         // system prompt, conteúdo completo sob demanda).

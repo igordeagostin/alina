@@ -14,10 +14,15 @@ public sealed class ParametroFerramenta
     [JsonPropertyName("obrigatorio")]
     public bool Obrigatorio { get; set; } = true;
 
+    /// <summary>Natureza do valor — decide a validação antes de executar o comando.</summary>
+    [JsonPropertyName("tipo")]
+    public TipoParametroFerramenta Tipo { get; set; } = TipoParametroFerramenta.Automatico;
+
     public ParametroFerramenta Clonar() => new ParametroFerramenta
     {
         Nome = Nome,
         Descricao = Descricao,
         Obrigatorio = Obrigatorio,
+        Tipo = Tipo,
     };
 }

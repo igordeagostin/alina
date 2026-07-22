@@ -82,6 +82,60 @@ public sealed class FuncaoFerramentaTests
 
         Assert.Contains("obrigatório", result?.ToString(), StringComparison.OrdinalIgnoreCase);
     }
+
+    private static DefinicaoFerramenta ComCaminho(TipoParametroFerramenta tipo) => new()
+    {
+        Nome = "abrir",
+        Descricao = "abre uma pasta",
+        ExigeConfirmacao = false,
+        Comando = OperatingSystem.IsWindows() ? "cmd" : "echo",
+        Argumentos = OperatingSystem.IsWindows() ? ["/c", "echo", "{caminho}"] : ["{caminho}"],
+        Parametros = [new ParametroFerramenta { Nome = "caminho", Descricao = "pasta", Tipo = tipo }],
+    };
+
+    [Fact]
+    public async Task Diretorio_inexistente_nao_executa_e_orienta_a_localizar()
+    {
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: true);
+        AIFunction function = new FerramentaDeclarada(ComCaminho(TipoParametroFerramenta.Diretorio), confirmation).AsAIFunction();
+
+        object? result = await function.InvokeAsync(new AIFunctionArguments { ["caminho"] = "diario api" });
+
+        string texto = result?.ToString() ?? string.Empty;
+        Assert.Contains("não existe", texto, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("localizar_projeto", texto);
+        Assert.DoesNotContain("[exit", texto);
+    }
+
+    [Fact]
+    public async Task Parametro_chamado_caminho_valida_mesmo_sem_tipo_declarado()
+    {
+        AIFunction function = new FerramentaDeclarada(ComCaminho(TipoParametroFerramenta.Automatico), new FakeConfirmationService(true)).AsAIFunction();
+
+        object? result = await function.InvokeAsync(new AIFunctionArguments { ["caminho"] = "projeto que nao existe" });
+
+        Assert.Contains("Erro", result?.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Diretorio_existente_executa_normalmente()
+    {
+        AIFunction function = new FerramentaDeclarada(ComCaminho(TipoParametroFerramenta.Diretorio), new FakeConfirmationService(true)).AsAIFunction();
+
+        object? result = await function.InvokeAsync(new AIFunctionArguments { ["caminho"] = Path.GetTempPath() });
+
+        Assert.Contains("[exit 0]", result?.ToString());
+    }
+
+    [Fact]
+    public async Task Tipo_texto_explicito_desliga_a_validacao_de_caminho()
+    {
+        AIFunction function = new FerramentaDeclarada(ComCaminho(TipoParametroFerramenta.Texto), new FakeConfirmationService(true)).AsAIFunction();
+
+        object? result = await function.InvokeAsync(new AIFunctionArguments { ["caminho"] = "pasta-que-nao-existe" });
+
+        Assert.Contains("pasta-que-nao-existe", result?.ToString());
+    }
 }
 
 public sealed class FileFerramentaStoreTests : IDisposable

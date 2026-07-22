@@ -1,6 +1,8 @@
 using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Models;
+using Alina.Core.Permissoes;
+using Alina.Core.Personalidade;
 using Alina.Core.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -24,6 +26,8 @@ public sealed class ChatOrchestrator : IOrchestrator
     private readonly IProfileStore _profile;
     private readonly IMemoryRetriever _memory;
     private readonly IHabilidadeStore _habilidades;
+    private readonly IPoliticaPermissao? _politica;
+    private readonly IPersonalidadeStore? _personalidade;
     private readonly ILogger<ChatOrchestrator> _logger;
 
     private Conversation _current = new();
@@ -37,6 +41,8 @@ public sealed class ChatOrchestrator : IOrchestrator
         IProfileStore profile,
         IMemoryRetriever memory,
         IHabilidadeStore habilidades,
+        IPoliticaPermissao? politica = null,
+        IPersonalidadeStore? personalidade = null,
         ILogger<ChatOrchestrator>? logger = null)
     {
         _client = client;
@@ -45,6 +51,8 @@ public sealed class ChatOrchestrator : IOrchestrator
         _profile = profile;
         _memory = memory;
         _habilidades = habilidades;
+        _politica = politica;
+        _personalidade = personalidade;
         _logger = logger ?? NullLogger<ChatOrchestrator>.Instance;
     }
 
@@ -145,10 +153,15 @@ public sealed class ChatOrchestrator : IOrchestrator
 
         IReadOnlyList<HabilidadeResumo> habilidades = await _habilidades.ListarAsync(cancellationToken);
 
+        PerfilPersonalidade? perfil = _personalidade is null
+            ? null
+            : await _personalidade.ObterAsync(cancellationToken);
+
         _logger.LogDebug(
             "Memória: {Index} no índice, {Detailed} detalhadas ({Pinned} fixadas + {Relevant} relevantes); {Habilidades} habilidades.",
             index.Count, detailed.Count, pinned.Count, relevant.Count, habilidades.Count);
 
-        return SystemPromptBuilder.Build(_tools.Tools, _preferences, index, detailed, habilidades);
+        return SystemPromptBuilder.Build(
+            _tools.Tools, _preferences, index, detailed, habilidades, _politica?.Opcoes.DiretoriosConfiaveis, perfil);
     }
 }

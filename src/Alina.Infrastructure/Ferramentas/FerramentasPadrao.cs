@@ -15,7 +15,8 @@ internal static class FerramentasPadrao
         {
             Nome = "abrir_no_vscode",
             Descricao =
-                "Abre uma pasta existente em uma NOVA janela do VS Code. Passe o caminho absoluto do projeto. " +
+                "Abre uma pasta existente em uma NOVA janela do VS Code. Passe o caminho absoluto do projeto — " +
+                "se o usuário citou o projeto pelo nome, descubra o caminho antes com 'localizar_projeto'. " +
                 "Use para atender pedidos como \"abra o projeto X\".",
             ExigeConfirmacao = false,
             Comando = "cmd",
@@ -27,6 +28,7 @@ internal static class FerramentasPadrao
                     Nome = "caminho",
                     Descricao = "Caminho absoluto da pasta do projeto a abrir.",
                     Obrigatorio = true,
+                    Tipo = TipoParametroFerramenta.Diretorio,
                 },
             ],
         };

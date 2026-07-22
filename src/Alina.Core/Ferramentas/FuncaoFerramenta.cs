@@ -53,6 +53,15 @@ internal sealed class FuncaoFerramenta : AIFunction
         string[] args = _definicao.Argumentos.Select(a => Substituir(a, valores)).ToArray();
         string diretorio = Substituir(_definicao.DiretorioTrabalho, valores);
 
+        foreach (ParametroFerramenta parametro in _definicao.Parametros)
+        {
+            string? erro = ValidadorParametro.Validar(parametro, valores[parametro.Nome], diretorio);
+            if (erro is not null)
+            {
+                return erro;
+            }
+        }
+
         if (_definicao.ExigeConfirmacao)
         {
             string previa = $"{_definicao.Comando} {string.Join(' ', args)}";
@@ -76,7 +85,7 @@ internal sealed class FuncaoFerramenta : AIFunction
             propriedades[parametro.Nome] = new JsonObject
             {
                 ["type"] = "string",
-                ["description"] = parametro.Descricao,
+                ["description"] = DescreverParametro(parametro),
             };
 
             if (parametro.Obrigatorio)
@@ -98,6 +107,15 @@ internal sealed class FuncaoFerramenta : AIFunction
 
         return JsonSerializer.SerializeToElement(schema);
     }
+
+    private static string DescreverParametro(ParametroFerramenta parametro) => ValidadorParametro.TipoEfetivo(parametro) switch
+    {
+        TipoParametroFerramenta.Diretorio => parametro.Descricao +
+            " Informe o caminho absoluto de uma pasta que EXISTE no disco — confirme antes com 'localizar_projeto' ou 'listar_diretorio'; nome de projeto não serve.",
+        TipoParametroFerramenta.Arquivo => parametro.Descricao +
+            " Informe o caminho absoluto de um arquivo que EXISTE no disco.",
+        _ => parametro.Descricao,
+    };
 
     private static string Substituir(string? modelo, IReadOnlyDictionary<string, string> valores)
     {

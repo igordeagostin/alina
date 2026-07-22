@@ -105,6 +105,10 @@ public static class Composition
         builder.Services.AddSingleton<ITool, TerminalTool>();
         builder.Services.AddSingleton<ITool, FileReadTool>();
         builder.Services.AddSingleton<ITool, ListarDiretorioTool>();
+        builder.Services.AddSingleton<ITool>(sp =>
+            new LocalizarProjetoTool(
+                sp.GetRequiredService<IConfirmationService>(),
+                sp.GetRequiredService<IPoliticaPermissao>()));
 
         // Servidor de permissão (Opção A): pedidos de permissão do Claude Code em modo headless
         // aparecem como overlay na UI (com opções de escopo), em vez de serem bloqueados.

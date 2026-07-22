@@ -20,8 +20,11 @@ memória permanente, voz push-to-talk, ferramentas declarativas e execução em 
   concisas. Um arquivo por tipo, namespace file-scoped.
 - **Nunca use `var`.** Sempre declare o tipo explícito, mesmo quando ele for aparente pelo
   lado direito da atribuição. A regra é reforçada pelo `.editorconfig` (IDE0008 como erro).
-- **Classes CSS separadas por traço.** Use `-` como separador em nomes de classe
-  (ex.: `.cfg-abas`, `.config-grupo`). Não use duplo underscore estilo BEM (`.cfg__abas`).
+- **Classes CSS sempre com traço simples.** Use `-` como separador em nomes de classe
+  (ex.: `.cfg-abas`, `.config-grupo`). Nada de sintaxe BEM: nem duplo underscore
+  (`.cfg__abas`) nem duplo traço para modificadores (`.config-item--ferramenta`). Um
+  modificador é só mais uma palavra no nome: `.config-item-ferramenta`, `.cfg-aba-ativa`,
+  `.msg-pending`. O duplo traço fica reservado às variáveis CSS (`--accent`, `--text`).
 
 ## Segredos e chaves de API
 

@@ -1,9 +1,11 @@
+@using System.Globalization
 @using System.Text.Json
 @using Alina.App.Services
 @using Alina.Core.Ferramentas
 @using Alina.Core.Habilidades
 @using Alina.Core.Orchestration
 @using Alina.Core.Permissoes
+@using Alina.Core.Personalidade
 @using Alina.Infrastructure.Llm
 @using Microsoft.Extensions.AI
 @using Microsoft.JSInterop
@@ -20,6 +22,7 @@
 @inject SeletorPasta SeletorPasta
 @inject PastaDadosService PastaDados
 @inject ConfiguracoesService Config
+@inject IPersonalidadeStore Personalidade
 @inject IHabilidadeStore Habilidades
 @inject IGeradorHabilidade GeradorHab
 @inject IFerramentaStore Ferramentas
@@ -27,7 +30,7 @@
 @inject IJSRuntime JS
 @implements IDisposable
 
-<div class="shell @(UiState.Compacto ? "shell--compacto" : "shell--detalhado") shell--@Status.Current.ToString().ToLowerInvariant()">
+<div class="shell @(UiState.Compacto ? "shell-compacto" : "shell-detalhado") shell-@Status.Current.ToString().ToLowerInvariant()">
     <div class="shell-header">
         <img class="shell-logo" src="logo.svg" alt="Alina" />
         <div class="shell-title">Alina</div>
@@ -40,7 +43,7 @@
     <div class="voz">
         <div class="orb-area">
             <span class="orb-aura"></span>
-            <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@Ocupado" title="@RotuloMicrofone">
+            <button class="orb orb-principal" @onclick="AlternarEscutaAsync" disabled="@Ocupado" title="@RotuloMicrofone">
                 <span class="orb-pulso"></span>
             </button>
         </div>
@@ -52,11 +55,11 @@
     <div class="shell-log">
         @foreach (var m in Log.Snapshot())
         {
-            <div class="msg msg--@m.Tipo">@m.Texto</div>
+            <div class="msg msg-@m.Tipo">@m.Texto</div>
         }
         @if (Status.Current == AssistantState.Thinking)
         {
-            <div class="msg msg--bot msg--pending">pensando…</div>
+            <div class="msg msg-bot msg-pending">pensando…</div>
         }
     </div>
 
@@ -81,19 +84,21 @@
             </div>
 
             <div class="cfg-abas">
-                <button class="cfg-aba @(_aba == AbaConfig.Geral ? "cfg-aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Geral ? "cfg-aba-ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Geral">Geral</button>
-                <button class="cfg-aba @(_aba == AbaConfig.Aparencia ? "cfg-aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Aparencia ? "cfg-aba-ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Aparencia">Aparência</button>
-                <button class="cfg-aba @(_aba == AbaConfig.IA ? "cfg-aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.IA ? "cfg-aba-ativa" : "")"
                         @onclick="() => _aba = AbaConfig.IA">IA</button>
-                <button class="cfg-aba @(_aba == AbaConfig.Voz ? "cfg-aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Personalidade ? "cfg-aba-ativa" : "")"
+                        @onclick="() => _aba = AbaConfig.Personalidade">Personalidade</button>
+                <button class="cfg-aba @(_aba == AbaConfig.Voz ? "cfg-aba-ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Voz">Voz</button>
-                <button class="cfg-aba @(_aba == AbaConfig.Permissoes ? "cfg-aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Permissoes ? "cfg-aba-ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Permissoes">Permissões</button>
-                <button class="cfg-aba @(_aba == AbaConfig.Habilidades ? "cfg-aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Habilidades ? "cfg-aba-ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Habilidades">Habilidades</button>
-                <button class="cfg-aba @(_aba == AbaConfig.Ferramentas ? "cfg-aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Ferramentas ? "cfg-aba-ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Ferramentas">Ferramentas</button>
             </div>
 
@@ -118,7 +123,7 @@
                     </div>
 
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Pasta de dados</span>
                             <div class="cfg-voz">
                                 <input class="cfg-campo" @bind="_pastaDados" placeholder="@PastaDados.PastaAtual" />
@@ -143,7 +148,7 @@
                 @if (_aba == AbaConfig.IA)
                 {
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Modelo do cérebro</span>
                             <select class="cfg-campo" @bind="_modeloLlm">
                                 @foreach (var m in ConfigLlm.ModelosDisponiveis)
@@ -156,7 +161,7 @@
                     </div>
 
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Modelo do Claude Code</span>
                             <select class="cfg-campo" @bind="_modeloClaudeCode">
                                 @foreach (var m in ConfigClaudeCode.ModelosDisponiveis)
@@ -169,11 +174,56 @@
                     </div>
 
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Chave da API OpenAI</span>
                             <input type="password" class="cfg-campo" @bind="_chaveLlm"
                                    placeholder="@(ConfigLlm.ChaveDefinida ? "•••••••• (definida — deixe em branco para manter)" : "sk-…")" />
                             <span class="cfg-row-sub">Guardada só neste computador, criptografada para o seu usuário do Windows — nunca é versionada nem enviada a lugar nenhum. Usada pelo cérebro (OpenAI) e pela voz.</span>
+                        </div>
+                    </div>
+                }
+
+                @if (_aba == AbaConfig.Personalidade)
+                {
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row-empilhado">
+                            <span class="cfg-row-titulo">Jeito da Alina</span>
+                            <span class="cfg-row-sub">Define como ela conversa: quanto fala, quanto se antecipa e o tom. Vale já na próxima mensagem, sem reiniciar.</span>
+                        </div>
+                    </div>
+
+                    <div class="cfg-card">
+                        <CampoDeslizante Titulo="Extensão das respostas"
+                                         Descricao="@($"{TextoPersonalidade.RotuloVerbosidade(_personalidade.Verbosidade)} — quanto texto ela produz por resposta.")"
+                                         Minimo="1" Maximo="5" Passo="1" Casas="0"
+                                         Valor="_personalidade.Verbosidade"
+                                         ValorChanged="(double v) => _personalidade.Verbosidade = (int)v" />
+                        <CampoDeslizante Titulo="Iniciativa"
+                                         Descricao="@($"{TextoPersonalidade.RotuloProatividade(_personalidade.Proatividade)} — quanto ela sugere próximos passos e oferece ajuda extra depois de concluir.")"
+                                         Minimo="1" Maximo="5" Passo="1" Casas="0"
+                                         Valor="_personalidade.Proatividade"
+                                         ValorChanged="(double v) => _personalidade.Proatividade = (int)v" />
+                        <CampoDeslizante Titulo="Humor"
+                                         Descricao="@($"{TextoPersonalidade.RotuloHumor(_personalidade.Humor)} — quanta ironia e piada entram no tom.")"
+                                         Minimo="1" Maximo="5" Passo="1" Casas="0"
+                                         Valor="_personalidade.Humor"
+                                         ValorChanged="(double v) => _personalidade.Humor = (int)v" />
+                        <CampoDeslizante Titulo="Formalidade"
+                                         Descricao="@($"{TextoPersonalidade.RotuloFormalidade(_personalidade.Formalidade)} — o registro da linguagem, do bem solto ao formal.")"
+                                         Minimo="1" Maximo="5" Passo="1" Casas="0"
+                                         Valor="_personalidade.Formalidade"
+                                         ValorChanged="(double v) => _personalidade.Formalidade = (int)v" />
+                    </div>
+
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row-empilhado">
+                            <span class="cfg-row-titulo">Orientações para a Alina</span>
+                            <textarea class="cfg-textarea" @bind="_personalidade.Instrucoes" rows="8"
+                                      placeholder="Ex.: Ao terminar uma tarefa, apenas confirme o que fez. Me chame de Igor. Não repita o comando que executou."></textarea>
+                            <span class="cfg-row-sub">Texto livre que entra no início de toda conversa, como um prompt inicial. Tem prioridade sobre os ajustes acima.</span>
+                        </div>
+                        <div class="config-item config-item-acoes">
+                            <button class="config-link" @onclick="RestaurarPersonalidade">restaurar padrão</button>
                         </div>
                     </div>
                 }
@@ -209,7 +259,7 @@
                     </div>
 
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Voz da Alina</span>
                             <div class="cfg-voz">
                                 <select class="cfg-campo" @bind="_edicao.Voz">
@@ -257,7 +307,7 @@
                 @if (_aba == AbaConfig.Permissoes)
                 {
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Quando não houver regra</span>
                             <select class="cfg-campo" @bind="_permOpcoes.ModoPadrao">
                                 <option value="@ModoPermissao.Perguntar">Perguntar o que não for coberto</option>
@@ -321,7 +371,7 @@
                 @if (_aba == AbaConfig.Habilidades)
                 {
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Habilidades aprendidas</span>
                             <span class="cfg-row-sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Alterações aqui são gravadas na hora.</span>
                         </div>
@@ -334,14 +384,16 @@
                         }
                         @foreach (var h in _habilidades)
                         {
-                            <div class="config-item">
+                            <div class="config-item config-item-empilhado">
                                 <div class="config-item-texto">
                                     <strong class="hab-nome">@h.Nome</strong>
                                     <span class="hab-descricao">@h.Descricao</span>
                                 </div>
-                                <button class="config-link" @onclick="() => VisualizarHabilidadeAsync(h.Nome)">visualizar</button>
-                                <button class="config-link" @onclick="() => EditarHabilidadeAsync(h.Nome)">editar</button>
-                                <button class="config-link" @onclick="() => RemoverHabilidadeAsync(h.Nome)">remover</button>
+                                <div class="config-item-botoes">
+                                    <button class="config-link" @onclick="() => VisualizarHabilidadeAsync(h.Nome)">visualizar</button>
+                                    <button class="config-link" @onclick="() => EditarHabilidadeAsync(h.Nome)">editar</button>
+                                    <button class="config-link" @onclick="() => RemoverHabilidadeAsync(h.Nome)">remover</button>
+                                </div>
                             </div>
                         }
                         @if (!_criandoHab && !_editandoHabilidade)
@@ -373,11 +425,11 @@
                                     }
                                     @foreach (var m in _historicoHab)
                                     {
-                                        <div class="msg msg--@(m.Role == ChatRole.User ? "user" : "bot")">@m.Text</div>
+                                        <div class="msg msg-@(m.Role == ChatRole.User ? "user" : "bot")">@m.Text</div>
                                     }
                                     @if (_gerandoHab)
                                     {
-                                        <div class="msg msg--bot msg--pending">pensando…</div>
+                                        <div class="msg msg-bot msg-pending">pensando…</div>
                                     }
                                 </div>
 
@@ -399,7 +451,7 @@
                                     <button class="cfg-salvar" @onclick="EnviarMensagemHabAsync"
                                             disabled="@(_gerandoHab || string.IsNullOrWhiteSpace(_inputHab))">Enviar</button>
                                 </div>
-                                <div class="config-item config-item--acoes">
+                                <div class="config-item config-item-acoes">
                                     <button class="config-link" @onclick="PreencherManualmente">preencher manualmente</button>
                                     <button class="cfg-cancelar" @onclick="CancelarCriacaoHab">Cancelar</button>
                                 </div>
@@ -414,9 +466,9 @@
                             <input class="config-campo" @bind="_habTitulo" placeholder="Título (ex: Deploy da API do Diário)" />
                             <input class="config-campo" @bind="_habDescricao" placeholder="Descrição de uma linha" />
                             <div class="hab-abas">
-                                <button class="hab-abas-aba @(!_habPreview ? "hab-abas-aba--ativa" : string.Empty)"
+                                <button class="hab-abas-aba @(!_habPreview ? "hab-abas-aba-ativa" : string.Empty)"
                                         @onclick="() => _habPreview = false">Editar</button>
-                                <button class="hab-abas-aba @(_habPreview ? "hab-abas-aba--ativa" : string.Empty)"
+                                <button class="hab-abas-aba @(_habPreview ? "hab-abas-aba-ativa" : string.Empty)"
                                         @onclick="() => _habPreview = true">Pré-visualizar</button>
                             </div>
                             @if (_habPreview)
@@ -428,7 +480,7 @@
                                 <textarea class="cfg-textarea" @bind="_habConteudo" rows="10"
                                           placeholder="Instruções da habilidade, em Markdown…"></textarea>
                             }
-                            <div class="config-item config-item--acoes">
+                            <div class="config-item config-item-acoes">
                                 <button class="cfg-cancelar" @onclick="() => _editandoHabilidade = false">Cancelar</button>
                                 <button class="cfg-salvar" @onclick="SalvarHabilidadeAsync"
                                         disabled="@(string.IsNullOrWhiteSpace(_habTitulo) || string.IsNullOrWhiteSpace(_habConteudo))">
@@ -442,7 +494,7 @@
                 @if (_aba == AbaConfig.Ferramentas)
                 {
                     <div class="cfg-card">
-                        <div class="cfg-row cfg-row--empilhado">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Ferramentas da Alina</span>
                             <span class="cfg-row-sub">Cada ferramenta é um comando que a Alina pode executar diretamente, definido em JSON — sem novo build. Desligar a confirmação é o que dispensa o SIM/NÃO; use com cuidado. Alterações valem no próximo turno.</span>
                         </div>
@@ -455,18 +507,20 @@
                         }
                         @foreach (var f in _ferramentas)
                         {
-                            <div class="config-item">
+                            <div class="config-item config-item-empilhado">
                                 <div class="config-item-texto">
                                     <strong class="hab-nome">@f.Nome</strong>
                                     <span class="hab-descricao">@f.Descricao</span>
                                 </div>
-                                <button class="config-link" title="@(f.ExigeConfirmacao ? "Pede confirmação ao executar" : "Roda sem confirmação")"
-                                        @onclick="() => AlternarConfirmacaoAsync(f.Nome)">
-                                    @(f.ExigeConfirmacao ? "🔒 confirma" : "⚡ direto")
-                                </button>
-                                <button class="config-link" @onclick="() => VisualizarFerramentaAsync(f.Nome)">visualizar</button>
-                                <button class="config-link" @onclick="() => EditarFerramentaAsync(f.Nome)">editar</button>
-                                <button class="config-link" @onclick="() => RemoverFerramentaAsync(f.Nome)">remover</button>
+                                <div class="config-item-botoes">
+                                    <button class="config-link" title="@(f.ExigeConfirmacao ? "Pede confirmação ao executar" : "Roda sem confirmação")"
+                                            @onclick="() => AlternarConfirmacaoAsync(f.Nome)">
+                                        @(f.ExigeConfirmacao ? "🔒 confirma" : "⚡ direto")
+                                    </button>
+                                    <button class="config-link" @onclick="() => VisualizarFerramentaAsync(f.Nome)">visualizar</button>
+                                    <button class="config-link" @onclick="() => EditarFerramentaAsync(f.Nome)">editar</button>
+                                    <button class="config-link" @onclick="() => RemoverFerramentaAsync(f.Nome)">remover</button>
+                                </div>
                             </div>
                         }
                         @if (!_criandoFerr && !_editandoFerramenta)
@@ -498,11 +552,11 @@
                                     }
                                     @foreach (var m in _historicoFerr)
                                     {
-                                        <div class="msg msg--@(m.Role == ChatRole.User ? "user" : "bot")">@m.Text</div>
+                                        <div class="msg msg-@(m.Role == ChatRole.User ? "user" : "bot")">@m.Text</div>
                                     }
                                     @if (_gerandoFerr)
                                     {
-                                        <div class="msg msg--bot msg--pending">pensando…</div>
+                                        <div class="msg msg-bot msg-pending">pensando…</div>
                                     }
                                 </div>
 
@@ -524,7 +578,7 @@
                                     <button class="cfg-salvar" @onclick="EnviarMensagemFerrAsync"
                                             disabled="@(_gerandoFerr || string.IsNullOrWhiteSpace(_inputFerr))">Enviar</button>
                                 </div>
-                                <div class="config-item config-item--acoes">
+                                <div class="config-item config-item-acoes">
                                     <button class="config-link" @onclick="PreencherManualmenteFerr">preencher manualmente</button>
                                     <button class="cfg-cancelar" @onclick="() => _criandoFerr = false">Cancelar</button>
                                 </div>
@@ -543,7 +597,7 @@
                             {
                                 <span class="ferr-erro">@_ferrErro</span>
                             }
-                            <div class="config-item config-item--acoes">
+                            <div class="config-item config-item-acoes">
                                 <button class="cfg-cancelar" @onclick="() => _editandoFerramenta = false">Cancelar</button>
                                 <button class="cfg-salvar" @onclick="SalvarFerramentaAsync"
                                         disabled="@string.IsNullOrWhiteSpace(_ferrJson)">
@@ -586,7 +640,7 @@
             <div class="confirm-caixa">
                 <div class="confirm-titulo">Permissão do Claude Code</div>
                 <div class="confirm-acao">@_permissaoPendente.Pedido.Descricao</div>
-                <div class="confirm-botoes confirm-botoes--escopo">
+                <div class="confirm-botoes confirm-botoes-escopo">
                     <button class="confirm-nao" @onclick="() => ResponderPermissao(false, EscopoPermissao.UmaVez)">Não</button>
                     <button class="confirm-sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.UmaVez)">Uma vez</button>
                     <button class="confirm-sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.SempreNesteDiretorio)">Sempre aqui</button>
@@ -603,7 +657,7 @@
     private PedidoPermissaoUi? _permissaoPendente;
     private bool _jsPronto;
 
-    private enum AbaConfig { Geral, Aparencia, IA, Voz, Permissoes, Habilidades, Ferramentas }
+    private enum AbaConfig { Geral, Aparencia, IA, Personalidade, Voz, Permissoes, Habilidades, Ferramentas }
 
     private bool _configAberta;
     private AbaConfig _aba = AbaConfig.Geral;
@@ -615,6 +669,7 @@
     private PoliticaPermissaoOptions _permOpcoes = new();
     private string _novoDiretorio = string.Empty;
     private string _pastaDados = string.Empty;
+    private PerfilPersonalidade _personalidade = new();
 
     private List<HabilidadeResumo> _habilidades = new();
     private bool _editandoHabilidade;
@@ -790,6 +845,8 @@
 
     private void RemoverRegra(string id) => Politica.RemoverRegra(id);
 
+    private void RestaurarPersonalidade() => _personalidade = new PerfilPersonalidade();
+
     private static PoliticaPermissaoOptions ClonarOpcoes(PoliticaPermissaoOptions o) => new()
     {
         ModoPadrao = o.ModoPadrao,
@@ -824,6 +881,7 @@
         _permOpcoes = ClonarOpcoes(Politica.Opcoes);
         _novoDiretorio = string.Empty;
         _pastaDados = PastaDados.PastaAtual;
+        _personalidade = await Personalidade.ObterAsync();
         _editandoHabilidade = false;
         await CarregarHabilidadesAsync();
         _editandoFerramenta = false;
@@ -1222,13 +1280,14 @@
         }
     }
 
-    private void SalvarConfiguracoes()
+    private async Task SalvarConfiguracoes()
     {
         Config.IniciarComWindows = _iniciarComWindows;
         Config.Salvar(_edicao);
         Politica.AtualizarOpcoes(_permOpcoes);
         SalvarLlm();
         ConfigClaudeCode.Salvar(_modeloClaudeCode);
+        await Personalidade.SalvarAsync(_personalidade);
         _configAberta = false;
 
         AplicarPastaDados();

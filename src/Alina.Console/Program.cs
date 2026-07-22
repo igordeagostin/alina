@@ -43,6 +43,10 @@ builder.Services.AddSingleton<IConfirmationService>(confirmation);
 builder.Services.AddSingleton<ITool, TerminalTool>();
 builder.Services.AddSingleton<ITool, FileReadTool>();
 builder.Services.AddSingleton<ITool, ListarDiretorioTool>();
+builder.Services.AddSingleton<ITool>(sp =>
+    new LocalizarProjetoTool(
+        sp.GetRequiredService<IConfirmationService>(),
+        sp.GetRequiredService<IPoliticaPermissao>()));
 
 // Confirmação de permissão com escopo (uma vez / sempre / sempre neste diretório),
 // roteada entre console e voz conforme o modo ativo.

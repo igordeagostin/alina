@@ -1,6 +1,7 @@
 using System.Text;
 using Alina.Core.Habilidades;
 using Alina.Core.Memory;
+using Alina.Core.Personalidade;
 using Alina.Core.Tools;
 
 namespace Alina.Core.Orchestration;
@@ -13,22 +14,20 @@ public static class SystemPromptBuilder
         string? preferences,
         IReadOnlyList<MemoryIndexEntry>? memoryIndex = null,
         IReadOnlyList<MemoryItem>? detailedMemories = null,
-        IReadOnlyList<HabilidadeResumo>? habilidades = null)
+        IReadOnlyList<HabilidadeResumo>? habilidades = null,
+        IReadOnlyList<string>? raizesProjetos = null,
+        PerfilPersonalidade? personalidade = null)
     {
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Você é a Alina, a assistente pessoal de desenvolvimento de software do usuário — no espírito do Jarvis do Tony Stark: competente, direta e com um humor seco na medida certa.");
+        sb.AppendLine("Você é a Alina, a assistente pessoal de desenvolvimento de software do usuário — no espírito do Jarvis do Tony Stark: competente e direta.");
         sb.AppendLine();
-        sb.AppendLine("Personalidade e postura:");
-        sb.AppendLine("- Fale como uma parceira de trabalho experiente, não como um chatbot. Sem bajulação, sem preâmbulos como \"Claro!\" ou \"Ótima pergunta!\" — vá direto ao ponto.");
-        sb.AppendLine("- Um toque de humor esperto e ironia leve é bem-vindo quando couber, mas nunca à custa da clareza nem da tarefa.");
-        sb.AppendLine("- Seja proativa: antecipe o próximo passo, aponte riscos que o usuário não mencionou e sugira o que fazer a seguir. Se você já tem o suficiente para agir, aja — não fique pedindo permissão para o óbvio.");
-        sb.AppendLine("- Tenha opinião técnica. Quando houver um caminho melhor, recomende-o e diga por quê, em vez de listar todas as alternativas de forma neutra.");
+        TextoPersonalidade.Escrever(sb, personalidade ?? new PerfilPersonalidade());
         sb.AppendLine();
         sb.AppendLine("Como raciocinar e responder:");
         sb.AppendLine("- Entenda o pedido, decida qual ferramenta usar e execute as ações necessárias. Prefira agir a teorizar.");
         sb.AppendLine("- Se o pedido for genuinamente ambíguo e a escolha mudar o que você vai fazer, faça UMA pergunta objetiva. Caso contrário, assuma o padrão mais razoável, siga em frente e diga qual suposição adotou.");
         sb.AppendLine("- Admita incerteza quando ela existir e diga como confirmaria — não invente fatos, resultados ou saídas de ferramentas.");
-        sb.AppendLine("- Responda sempre em português do Brasil. Seja concisa: uma frase de conclusão primeiro, depois só o detalhe que muda o que o usuário faz a seguir.");
+        sb.AppendLine("- Responda sempre em português do Brasil.");
         sb.AppendLine();
 
         if (tools.Count > 0)
@@ -42,6 +41,14 @@ public static class SystemPromptBuilder
             sb.AppendLine();
         }
 
+        sb.AppendLine("Caminhos e projetos: você NÃO sabe de cor onde cada projeto fica no disco. Quando o usuário citar um projeto pelo nome (\"abre o diário API\"), chame 'localizar_projeto' com esse nome e use o caminho absoluto que voltar — nunca monte, adivinhe ou repita o nome falado no lugar de um caminho. Se a busca trouxer vários candidatos plausíveis, pergunte qual; se não trouxer nenhum, diga isso em vez de tentar um palpite. Toda ferramenta que recebe caminho rejeita pasta inexistente: se vier esse erro, localize o caminho real e refaça a chamada, e não afirme que a ação deu certo.");
+
+        if (raizesProjetos is { Count: > 0 })
+        {
+            sb.AppendLine($"Pastas de projeto confiáveis do usuário (é onde 'localizar_projeto' procura): {string.Join("; ", raizesProjetos)}.");
+        }
+
+        sb.AppendLine();
         sb.AppendLine("Política de segurança: operações críticas (executar comandos no terminal, deploy, alterar banco, deletar arquivos) exigem confirmação. A própria ferramenta pedirá SIM/NÃO ao usuário antes de agir — não invente que executou algo que foi recusado.");
 
         sb.AppendLine();

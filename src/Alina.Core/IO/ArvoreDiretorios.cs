@@ -11,12 +11,6 @@ namespace Alina.Core.IO;
 /// </summary>
 public static class ArvoreDiretorios
 {
-    private static readonly HashSet<string> Ignorados = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".git", ".vs", ".vscode", ".idea", "node_modules", "bin", "obj",
-        "packages", "dist", "build", "target", ".next", ".nuget", ".gradle",
-    };
-
     public static string Montar(
         IEnumerable<string> raizes,
         int profundidadeMaxima = 2,
@@ -73,7 +67,7 @@ public static class ArvoreDiretorios
             }
 
             string nome = Path.GetFileName(sub);
-            if (Ignorados.Contains(nome))
+            if (PastasIgnoradas.Contem(nome))
             {
                 continue;
             }

@@ -39,7 +39,9 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
         "- \"comando\": o executável a chamar (ex.: \"powershell\", \"git\", \"node\", \"cmd\").\n" +
         "- \"argumentos\": array de strings com os argumentos (podendo conter {placeholders}).\n" +
         "- \"exigeConfirmacao\": booleano.\n" +
-        "- \"parametros\": array de objetos { \"nome\", \"descricao\", \"obrigatorio\" } — um por placeholder.";
+        "- \"parametros\": array de objetos { \"nome\", \"descricao\", \"obrigatorio\", \"tipo\" } — um por placeholder. " +
+        "O \"tipo\" é \"Diretorio\" ou \"Arquivo\" quando o valor é um caminho que precisa existir no disco (a ferramenta " +
+        "recusa a chamada se não existir, em vez de executar às cegas), e \"Texto\" para o resto.";
 
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
@@ -108,6 +110,7 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
                 Nome = p.Nome!.Trim(),
                 Descricao = p.Descricao?.Trim() ?? string.Empty,
                 Obrigatorio = p.Obrigatorio,
+                Tipo = p.Tipo,
             })
             .ToList(),
     };
@@ -193,5 +196,6 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
         public string? Nome { get; set; }
         public string? Descricao { get; set; }
         public bool Obrigatorio { get; set; } = true;
+        public TipoParametroFerramenta Tipo { get; set; } = TipoParametroFerramenta.Automatico;
     }
 }
