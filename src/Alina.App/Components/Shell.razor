@@ -1,10 +1,12 @@
 @using System.Globalization
 @using Alina.App.Services
+@using Alina.Core.Habilidades
 @using Alina.Core.Orchestration
 @using Alina.Core.Permissoes
 @using Alina.Infrastructure.Llm
 @using Microsoft.JSInterop
 @inject ConfiguracoesLlmService ConfigLlm
+@inject ConfiguracoesClaudeCodeService ConfigClaudeCode
 @inject ReconfigurableChatClient Reconfig
 @inject ShellUiState UiState
 @inject IAssistantStatus Status
@@ -15,6 +17,7 @@
 @inject IPoliticaPermissao Politica
 @inject SeletorPasta SeletorPasta
 @inject ConfiguracoesService Config
+@inject IHabilidadeStore Habilidades
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -80,6 +83,8 @@
                         @onclick="() => _aba = AbaConfig.Voz">Voz</button>
                 <button class="cfg__aba @(_aba == AbaConfig.Permissoes ? "cfg__aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Permissoes">Permissões</button>
+                <button class="cfg__aba @(_aba == AbaConfig.Habilidades ? "cfg__aba--ativa" : "")"
+                        @onclick="() => _aba = AbaConfig.Habilidades">Habilidades</button>
             </div>
 
             <div class="cfg__corpo">
@@ -115,6 +120,19 @@
                                 }
                             </select>
                             <span class="cfg-row__sub">Modelos mais avançados conversam melhor, porém custam mais por uso. O trabalho pesado de código continua indo para o Claude Code (sua assinatura).</span>
+                        </div>
+                    </div>
+
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row--empilhado">
+                            <span class="cfg-row__titulo">Modelo do Claude Code</span>
+                            <select class="cfg-campo" @bind="_modeloClaudeCode">
+                                @foreach (var m in ConfigClaudeCode.ModelosDisponiveis)
+                                {
+                                    <option value="@m.Id">@m.Rotulo@(string.IsNullOrEmpty(m.Nota) ? "" : $" — {m.Nota}")</option>
+                                }
+                            </select>
+                            <span class="cfg-row__sub">Modelo que o Claude Code usa nas tarefas de código (via sua assinatura). "Padrão da assinatura" deixa o próprio Claude Code decidir.</span>
                         </div>
                     </div>
 
@@ -279,6 +297,53 @@
                         </div>
                     }
                 }
+
+                @if (_aba == AbaConfig.Habilidades)
+                {
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row--empilhado">
+                            <span class="cfg-row__titulo">Habilidades aprendidas</span>
+                            <span class="cfg-row__sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Alterações aqui são gravadas na hora.</span>
+                        </div>
+                    </div>
+
+                    <div class="config__grupo">
+                        @if (_habilidades.Count == 0)
+                        {
+                            <span class="cfg-row__sub">Nenhuma habilidade ainda. Peça à Alina para aprender uma, ou crie abaixo.</span>
+                        }
+                        @foreach (var h in _habilidades)
+                        {
+                            <div class="config__item">
+                                <div class="config__item-texto">
+                                    <strong class="hab__nome">@h.Nome</strong>
+                                    <span class="hab__descricao">@h.Descricao</span>
+                                </div>
+                                <button class="config__link" @onclick="() => EditarHabilidadeAsync(h.Nome)">editar</button>
+                                <button class="config__link" @onclick="() => RemoverHabilidadeAsync(h.Nome)">remover</button>
+                            </div>
+                        }
+                        <button class="config__confiar" @onclick="NovaHabilidade">＋ Nova habilidade</button>
+                    </div>
+
+                    @if (_editandoHabilidade)
+                    {
+                        <div class="config__grupo">
+                            <span class="config__grupo-titulo">@(_habEhNova ? "Nova habilidade" : $"Editando: {_habNomeOriginal}")</span>
+                            <input class="config__campo" @bind="_habTitulo" placeholder="Título (ex: Deploy da API do Diário)" />
+                            <input class="config__campo" @bind="_habDescricao" placeholder="Descrição de uma linha" />
+                            <textarea class="cfg-textarea" @bind="_habConteudo" rows="10"
+                                      placeholder="Instruções da habilidade, em Markdown…"></textarea>
+                            <div class="config__item config__item--acoes">
+                                <button class="cfg__cancelar" @onclick="() => _editandoHabilidade = false">Cancelar</button>
+                                <button class="cfg__salvar" @onclick="SalvarHabilidadeAsync"
+                                        disabled="@(string.IsNullOrWhiteSpace(_habTitulo) || string.IsNullOrWhiteSpace(_habConteudo))">
+                                    Salvar habilidade
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
             </div>
 
             <div class="cfg__rodape">
@@ -329,16 +394,25 @@
     private PedidoPermissaoUi? _permissaoPendente;
     private bool _jsPronto;
 
-    private enum AbaConfig { Geral, IA, Voz, Permissoes }
+    private enum AbaConfig { Geral, IA, Voz, Permissoes, Habilidades }
 
     private bool _configAberta;
     private AbaConfig _aba = AbaConfig.Geral;
     private ConfiguracoesApp _edicao = new();
     private bool _iniciarComWindows;
     private string _modeloLlm = string.Empty;
+    private string _modeloClaudeCode = string.Empty;
     private string _chaveLlm = string.Empty;
     private PoliticaPermissaoOptions _permOpcoes = new();
     private string _novoDiretorio = string.Empty;
+
+    private List<HabilidadeResumo> _habilidades = new();
+    private bool _editandoHabilidade;
+    private bool _habEhNova;
+    private string _habNomeOriginal = string.Empty;
+    private string _habTitulo = string.Empty;
+    private string _habDescricao = string.Empty;
+    private string _habConteudo = string.Empty;
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
@@ -481,7 +555,7 @@
 
     private void AlternarModo() => UiState.Alternar();
 
-    private void AbrirConfiguracoes()
+    private async Task AbrirConfiguracoes()
     {
         _edicao = new ConfiguracoesApp
         {
@@ -496,11 +570,83 @@
         };
         _iniciarComWindows = Config.IniciarComWindows;
         _modeloLlm = ConfigLlm.ModeloAtual;
+        _modeloClaudeCode = ConfigClaudeCode.ModeloAtual;
         _chaveLlm = string.Empty;
         _permOpcoes = ClonarOpcoes(Politica.Opcoes);
         _novoDiretorio = string.Empty;
+        _editandoHabilidade = false;
+        await CarregarHabilidadesAsync();
         _aba = AbaConfig.Geral;
         _configAberta = true;
+    }
+
+    private async Task CarregarHabilidadesAsync()
+        => _habilidades = (await Habilidades.ListarAsync()).ToList();
+
+    private void NovaHabilidade()
+    {
+        _habEhNova = true;
+        _habNomeOriginal = string.Empty;
+        _habTitulo = string.Empty;
+        _habDescricao = string.Empty;
+        _habConteudo = string.Empty;
+        _editandoHabilidade = true;
+    }
+
+    private async Task EditarHabilidadeAsync(string nome)
+    {
+        var habilidade = await Habilidades.ObterAsync(nome);
+        if (habilidade is null)
+        {
+            await CarregarHabilidadesAsync();
+            return;
+        }
+
+        _habEhNova = false;
+        _habNomeOriginal = habilidade.Nome;
+        _habTitulo = habilidade.Nome;
+        _habDescricao = habilidade.Descricao;
+        _habConteudo = habilidade.Conteudo;
+        _editandoHabilidade = true;
+    }
+
+    private async Task SalvarHabilidadeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_habTitulo) || string.IsNullOrWhiteSpace(_habConteudo))
+        {
+            return;
+        }
+
+        var habilidade = new Habilidade
+        {
+            Nome = _habTitulo,
+            Descricao = _habDescricao?.Trim() ?? string.Empty,
+            Conteudo = _habConteudo,
+        };
+
+        await Habilidades.SalvarAsync(habilidade);
+
+        // Se o título foi renomeado a ponto de mudar o identificador, remove o arquivo antigo.
+        if (!_habEhNova
+            && !string.IsNullOrEmpty(_habNomeOriginal)
+            && !string.Equals(_habNomeOriginal, habilidade.Nome, StringComparison.OrdinalIgnoreCase))
+        {
+            await Habilidades.RemoverAsync(_habNomeOriginal);
+        }
+
+        _editandoHabilidade = false;
+        await CarregarHabilidadesAsync();
+    }
+
+    private async Task RemoverHabilidadeAsync(string nome)
+    {
+        await Habilidades.RemoverAsync(nome);
+        if (string.Equals(_habNomeOriginal, nome, StringComparison.OrdinalIgnoreCase))
+        {
+            _editandoHabilidade = false;
+        }
+
+        await CarregarHabilidadesAsync();
     }
 
     private void FecharConfiguracoes() => _configAberta = false;
@@ -540,6 +686,7 @@
         Config.Salvar(_edicao);
         Politica.AtualizarOpcoes(_permOpcoes);
         SalvarLlm();
+        ConfigClaudeCode.Salvar(_modeloClaudeCode);
         _configAberta = false;
     }
 

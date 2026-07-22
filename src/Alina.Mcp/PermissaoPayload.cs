@@ -16,15 +16,15 @@ internal static class PermissaoPayload
     /// <summary>Monta uma descrição legível do que o Claude Code quer fazer.</summary>
     public static string DescreverPedido(string toolName, JsonElement input)
     {
-        var nome = string.IsNullOrWhiteSpace(toolName) ? "ferramenta" : toolName;
+        string nome = string.IsNullOrWhiteSpace(toolName) ? "ferramenta" : toolName;
 
         if (input.ValueKind == JsonValueKind.Object)
         {
-            foreach (var campo in CamposDescritivos)
+            foreach (string campo in CamposDescritivos)
             {
-                if (input.TryGetProperty(campo, out var v) && v.ValueKind == JsonValueKind.String)
+                if (input.TryGetProperty(campo, out JsonElement v) && v.ValueKind == JsonValueKind.String)
                 {
-                    var valor = v.GetString();
+                    string? valor = v.GetString();
                     if (!string.IsNullOrWhiteSpace(valor))
                     {
                         return $"O Claude Code quer usar {nome}: {Resumir(valor!, 200)}";
@@ -39,11 +39,11 @@ internal static class PermissaoPayload
     /// <summary>Resposta de autorização, devolvendo o input (inalterado) como <c>updatedInput</c>.</summary>
     public static string RespostaPermitir(JsonElement input)
     {
-        var updated = input.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
+        JsonNode? updated = input.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
             ? new JsonObject()
             : JsonNode.Parse(input.GetRawText());
 
-        var obj = new JsonObject
+        JsonObject obj = new JsonObject
         {
             ["behavior"] = "allow",
             ["updatedInput"] = updated,
@@ -54,7 +54,7 @@ internal static class PermissaoPayload
     /// <summary>Resposta de negação, com o motivo exibido ao agente.</summary>
     public static string RespostaNegar(string motivo)
     {
-        var obj = new JsonObject
+        JsonObject obj = new JsonObject
         {
             ["behavior"] = "deny",
             ["message"] = string.IsNullOrWhiteSpace(motivo) ? "Negado pelo usuário." : motivo,
@@ -64,7 +64,7 @@ internal static class PermissaoPayload
 
     private static string Resumir(string texto, int limite)
     {
-        var t = texto.Replace('\n', ' ').Replace('\r', ' ').Trim();
+        string t = texto.Replace('\n', ' ').Replace('\r', ' ').Trim();
         return t.Length <= limite ? t : t[..limite] + "…";
     }
 }

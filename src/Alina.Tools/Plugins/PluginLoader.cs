@@ -21,17 +21,17 @@ public static class PluginLoader
 
     public static PluginLoadResult Load(string directory, IConfirmationService confirmation)
     {
-        var tools = new List<PluginTool>();
-        var warnings = new List<string>();
+        List<PluginTool> tools = new List<PluginTool>();
+        List<string> warnings = new List<string>();
 
         if (!Directory.Exists(directory))
         {
             return new PluginLoadResult(tools, warnings);
         }
 
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in Directory.EnumerateFiles(directory, "*.plugin.json", SearchOption.TopDirectoryOnly))
+        foreach (string file in Directory.EnumerateFiles(directory, "*.plugin.json", SearchOption.TopDirectoryOnly))
         {
             PluginManifest? manifest;
             try
@@ -44,7 +44,7 @@ public static class PluginLoader
                 continue;
             }
 
-            var validation = Validate(manifest, seenNames);
+            string? validation = Validate(manifest, seenNames);
             if (validation is not null)
             {
                 warnings.Add($"{Path.GetFileName(file)}: {validation}");

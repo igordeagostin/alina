@@ -10,20 +10,20 @@ public sealed class ChatOrchestratorTests
 {
     private static ChatOrchestrator Build(FakeChatClient client, InMemoryConversationStore store, IMemoryStore? memory = null)
     {
-        var confirmation = new FakeConfirmationService(result: true);
-        var registry = new ToolRegistry(new ITool[] { new FileReadTool(confirmation) });
-        var retriever = new MemoryRetriever(memory ?? new InMemoryMemoryStore());
-        return new ChatOrchestrator(client, registry, store, new NullProfileStore(), retriever);
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: true);
+        ToolRegistry registry = new ToolRegistry(new ITool[] { new FileReadTool(confirmation) });
+        MemoryRetriever retriever = new MemoryRetriever(memory ?? new InMemoryMemoryStore());
+        return new ChatOrchestrator(client, registry, store, new NullProfileStore(), retriever, new InMemoryHabilidadeStore());
     }
 
     [Fact]
     public async Task SendAsync_retorna_texto_e_persiste_conversa()
     {
-        var client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "olá, Igor")));
-        var store = new InMemoryConversationStore();
-        var orchestrator = Build(client, store);
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "olá, Igor")));
+        InMemoryConversationStore store = new InMemoryConversationStore();
+        ChatOrchestrator orchestrator = Build(client, store);
 
-        var reply = await orchestrator.SendAsync("oi");
+        string reply = await orchestrator.SendAsync("oi");
 
         Assert.Equal("olá, Igor", reply);
         Assert.Equal(1, store.SaveCount);
@@ -34,9 +34,9 @@ public sealed class ChatOrchestratorTests
     [Fact]
     public async Task SendAsync_envia_system_prompt_e_tools_ao_LLM()
     {
-        var client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
-        var store = new InMemoryConversationStore();
-        var orchestrator = Build(client, store);
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
+        InMemoryConversationStore store = new InMemoryConversationStore();
+        ChatOrchestrator orchestrator = Build(client, store);
 
         await orchestrator.SendAsync("faça algo");
 
@@ -49,12 +49,12 @@ public sealed class ChatOrchestratorTests
     [Fact]
     public async Task SummarizeConversationAsync_resume_a_conversa_sem_tools()
     {
-        var client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "Resumo: usa .NET 10.")));
-        var store = new InMemoryConversationStore();
-        var orchestrator = Build(client, store);
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "Resumo: usa .NET 10.")));
+        InMemoryConversationStore store = new InMemoryConversationStore();
+        ChatOrchestrator orchestrator = Build(client, store);
 
         await orchestrator.SendAsync("uso .NET 10 em tudo");
-        var summary = await orchestrator.SummarizeConversationAsync();
+        string summary = await orchestrator.SummarizeConversationAsync();
 
         Assert.Equal("Resumo: usa .NET 10.", summary);
         // A síntese não deve oferecer tools ao modelo.
@@ -64,11 +64,11 @@ public sealed class ChatOrchestratorTests
     [Fact]
     public async Task SummarizeConversationAsync_conversa_vazia_retorna_vazio()
     {
-        var client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "não deveria ser chamado")));
-        var store = new InMemoryConversationStore();
-        var orchestrator = Build(client, store);
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "não deveria ser chamado")));
+        InMemoryConversationStore store = new InMemoryConversationStore();
+        ChatOrchestrator orchestrator = Build(client, store);
 
-        var summary = await orchestrator.SummarizeConversationAsync();
+        string summary = await orchestrator.SummarizeConversationAsync();
 
         Assert.Equal(string.Empty, summary);
     }
@@ -76,12 +76,12 @@ public sealed class ChatOrchestratorTests
     [Fact]
     public async Task StartNew_reinicia_a_conversa_atual()
     {
-        var client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
-        var store = new InMemoryConversationStore();
-        var orchestrator = Build(client, store);
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
+        InMemoryConversationStore store = new InMemoryConversationStore();
+        ChatOrchestrator orchestrator = Build(client, store);
 
         await orchestrator.SendAsync("primeira");
-        var firstId = orchestrator.Current.Id;
+        string firstId = orchestrator.Current.Id;
 
         orchestrator.StartNew();
 

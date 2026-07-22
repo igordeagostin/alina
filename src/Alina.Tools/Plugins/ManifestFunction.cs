@@ -34,11 +34,11 @@ internal sealed class ManifestFunction : AIFunction
     protected override async ValueTask<object?> InvokeCoreAsync(
         AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var parameter in _manifest.Parameters)
+        Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (PluginParameter parameter in _manifest.Parameters)
         {
-            arguments.TryGetValue(parameter.Name, out var raw);
-            var value = ToStringValue(raw);
+            arguments.TryGetValue(parameter.Name, out object? raw);
+            string value = ToStringValue(raw);
 
             if (parameter.Required && string.IsNullOrWhiteSpace(value))
             {
@@ -48,13 +48,13 @@ internal sealed class ManifestFunction : AIFunction
             values[parameter.Name] = value;
         }
 
-        var args = _manifest.Args.Select(a => Substitute(a, values)).ToArray();
-        var workingDir = Substitute(_manifest.WorkingDirectory, values);
+        string[] args = _manifest.Args.Select(a => Substitute(a, values)).ToArray();
+        string workingDir = Substitute(_manifest.WorkingDirectory, values);
 
         if (_manifest.RequiresConfirmation)
         {
-            var preview = $"{_manifest.Command} {string.Join(' ', args)}";
-            var confirmed = await _confirmation.ConfirmAsync($"Executar plugin '{_manifest.Name}'", preview, cancellationToken);
+            string preview = $"{_manifest.Command} {string.Join(' ', args)}";
+            bool confirmed = await _confirmation.ConfirmAsync($"Executar plugin '{_manifest.Name}'", preview, cancellationToken);
             if (!confirmed)
             {
                 return $"Operação cancelada pelo usuário — o plugin '{_manifest.Name}' NÃO foi executado.";
@@ -66,10 +66,10 @@ internal sealed class ManifestFunction : AIFunction
 
     private static JsonElement BuildSchema(PluginManifest manifest)
     {
-        var properties = new JsonObject();
-        var required = new JsonArray();
+        JsonObject properties = new JsonObject();
+        JsonArray required = new JsonArray();
 
-        foreach (var parameter in manifest.Parameters)
+        foreach (PluginParameter parameter in manifest.Parameters)
         {
             properties[parameter.Name] = new JsonObject
             {
@@ -83,7 +83,7 @@ internal sealed class ManifestFunction : AIFunction
             }
         }
 
-        var schema = new JsonObject
+        JsonObject schema = new JsonObject
         {
             ["type"] = "object",
             ["properties"] = properties,
@@ -104,8 +104,8 @@ internal sealed class ManifestFunction : AIFunction
             return string.Empty;
         }
 
-        var result = template;
-        foreach (var (key, value) in values)
+        string result = template;
+        foreach ((string? key, string? value) in values)
         {
             result = result.Replace("{" + key + "}", value, StringComparison.OrdinalIgnoreCase);
         }
@@ -125,7 +125,7 @@ internal sealed class ManifestFunction : AIFunction
     private static async Task<string> RunProcessAsync(
         string command, string[] args, string? workingDirectory, int timeoutSeconds, CancellationToken cancellationToken)
     {
-        var psi = new ProcessStartInfo
+        ProcessStartInfo psi = new ProcessStartInfo
         {
             FileName = command,
             RedirectStandardOutput = true,
@@ -139,15 +139,15 @@ internal sealed class ManifestFunction : AIFunction
             psi.WorkingDirectory = workingDirectory;
         }
 
-        foreach (var arg in args)
+        foreach (string arg in args)
         {
             psi.ArgumentList.Add(arg);
         }
 
         try
         {
-            using var process = new Process { StartInfo = psi };
-            var output = new StringBuilder();
+            using Process process = new Process { StartInfo = psi };
+            StringBuilder output = new StringBuilder();
 
             process.OutputDataReceived += (_, e) => { if (e.Data is not null) output.AppendLine(e.Data); };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) output.AppendLine(e.Data); };
@@ -156,7 +156,7 @@ internal sealed class ManifestFunction : AIFunction
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
             try
@@ -169,7 +169,7 @@ internal sealed class ManifestFunction : AIFunction
                 return $"Erro: o plugin excedeu {timeoutSeconds}s e foi encerrado.";
             }
 
-            var text = output.ToString().TrimEnd();
+            string text = output.ToString().TrimEnd();
             return $"[exit {process.ExitCode}]\n{text}";
         }
         catch (Exception ex)

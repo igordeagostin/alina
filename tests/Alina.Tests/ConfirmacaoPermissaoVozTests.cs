@@ -13,14 +13,14 @@ public sealed class ConfirmacaoPermissaoVozTests
     [Fact]
     public void Sim_simples_permite_uma_vez()
     {
-        var r = Interpretar("sim, pode");
+        RespostaConfirmacaoPermissao? r = Interpretar("sim, pode");
         Assert.Equal(new RespostaConfirmacaoPermissao(true, EscopoPermissao.UmaVez), r);
     }
 
     [Fact]
     public void Sempre_permite_com_escopo_sempre()
     {
-        var r = Interpretar("pode sempre");
+        RespostaConfirmacaoPermissao? r = Interpretar("pode sempre");
         Assert.Equal(new RespostaConfirmacaoPermissao(true, EscopoPermissao.Sempre), r);
     }
 
@@ -30,7 +30,7 @@ public sealed class ConfirmacaoPermissaoVozTests
     [InlineData("pode sempre aqui")]
     public void Sempre_no_diretorio_detecta_escopo_de_diretorio(string texto)
     {
-        var r = Interpretar(texto);
+        RespostaConfirmacaoPermissao? r = Interpretar(texto);
         Assert.Equal(new RespostaConfirmacaoPermissao(true, EscopoPermissao.SempreNesteDiretorio), r);
     }
 

@@ -9,7 +9,7 @@ public sealed class ConsoleConfirmationService : IConfirmationService
 {
     public Task<bool> ConfirmAsync(string action, string? details = null, CancellationToken cancellationToken = default)
     {
-        var previous = System.Console.ForegroundColor;
+        ConsoleColor previous = System.Console.ForegroundColor;
         System.Console.ForegroundColor = ConsoleColor.Yellow;
         System.Console.WriteLine();
         System.Console.WriteLine($"⚠  {action}");
@@ -20,8 +20,8 @@ public sealed class ConsoleConfirmationService : IConfirmationService
         System.Console.Write("Deseja realmente executar? (SIM/NÃO): ");
         System.Console.ForegroundColor = previous;
 
-        var answer = System.Console.ReadLine()?.Trim();
-        var confirmed = answer is not null &&
+        string? answer = System.Console.ReadLine()?.Trim();
+        bool confirmed = answer is not null &&
             (answer.Equals("SIM", StringComparison.OrdinalIgnoreCase) ||
              answer.Equals("S", StringComparison.OrdinalIgnoreCase) ||
              answer.Equals("Y", StringComparison.OrdinalIgnoreCase) ||

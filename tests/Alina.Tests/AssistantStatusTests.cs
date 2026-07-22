@@ -15,8 +15,8 @@ public sealed class AssistantStatusTests
     [Fact]
     public void Set_altera_estado_e_dispara_evento()
     {
-        var status = new AssistantStatus();
-        var recebidos = new List<AssistantState>();
+        AssistantStatus status = new AssistantStatus();
+        List<AssistantState> recebidos = new List<AssistantState>();
         status.Changed += (_, s) => recebidos.Add(s);
 
         status.Set(AssistantState.Thinking);
@@ -28,10 +28,10 @@ public sealed class AssistantStatusTests
     [Fact]
     public void Set_para_o_mesmo_estado_nao_dispara_evento()
     {
-        var status = new AssistantStatus();
+        AssistantStatus status = new AssistantStatus();
         status.Set(AssistantState.Listening);
 
-        var disparos = 0;
+        int disparos = 0;
         status.Changed += (_, _) => disparos++;
         status.Set(AssistantState.Listening);
 
@@ -41,14 +41,14 @@ public sealed class AssistantStatusTests
     [Fact]
     public async Task Tool_marca_Executing_durante_a_execucao_e_restaura_o_estado()
     {
-        var status = new AssistantStatus();
+        AssistantStatus status = new AssistantStatus();
         AssistantState? duranteExecucao = null;
 
-        var tool = new SondaTool(() => duranteExecucao = status.Current);
-        var registry = new ToolRegistry(new ITool[] { tool }, status);
+        SondaTool tool = new SondaTool(() => duranteExecucao = status.Current);
+        ToolRegistry registry = new ToolRegistry(new ITool[] { tool }, status);
 
         status.Set(AssistantState.Thinking);
-        var funcao = (AIFunction)registry.AsAIFunctions()[0];
+        AIFunction funcao = (AIFunction)registry.AsAIFunctions()[0];
         await funcao.InvokeAsync();
 
         Assert.Equal(AssistantState.Executing, duranteExecucao);
@@ -58,11 +58,11 @@ public sealed class AssistantStatusTests
     [Fact]
     public async Task Sem_status_a_tool_roda_sem_envolver()
     {
-        var tool = new SondaTool(() => { });
-        var registry = new ToolRegistry(new ITool[] { tool });
+        SondaTool tool = new SondaTool(() => { });
+        ToolRegistry registry = new ToolRegistry(new ITool[] { tool });
 
-        var funcao = (AIFunction)registry.AsAIFunctions()[0];
-        var resultado = await funcao.InvokeAsync();
+        AIFunction funcao = (AIFunction)registry.AsAIFunctions()[0];
+        object? resultado = await funcao.InvokeAsync();
 
         Assert.Equal("ok", resultado?.ToString());
     }

@@ -18,7 +18,7 @@ public sealed class JsonMemoryStore : IMemoryStore
     public JsonMemoryStore(string filePath)
     {
         _filePath = filePath;
-        var dir = Path.GetDirectoryName(_filePath);
+        string? dir = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrWhiteSpace(dir))
         {
             Directory.CreateDirectory(dir);
@@ -39,7 +39,7 @@ public sealed class JsonMemoryStore : IMemoryStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            var items = await LoadAsync(cancellationToken);
+            List<MemoryItem> items = await LoadAsync(cancellationToken);
             items.Add(item);
             await SaveAsync(items, cancellationToken);
         }
@@ -56,8 +56,8 @@ public sealed class JsonMemoryStore : IMemoryStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            var items = await LoadAsync(cancellationToken);
-            var index = items.FindIndex(i => string.Equals(i.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+            List<MemoryItem> items = await LoadAsync(cancellationToken);
+            int index = items.FindIndex(i => string.Equals(i.Id, item.Id, StringComparison.OrdinalIgnoreCase));
             if (index < 0)
             {
                 return false;
@@ -92,8 +92,8 @@ public sealed class JsonMemoryStore : IMemoryStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            var items = await LoadAsync(cancellationToken);
-            var removed = items.RemoveAll(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+            List<MemoryItem> items = await LoadAsync(cancellationToken);
+            int removed = items.RemoveAll(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
             if (removed > 0)
             {
                 await SaveAsync(items, cancellationToken);
@@ -116,8 +116,8 @@ public sealed class JsonMemoryStore : IMemoryStore
 
         try
         {
-            await using var stream = File.OpenRead(_filePath);
-            var items = await JsonSerializer.DeserializeAsync<List<MemoryItem>>(stream, JsonOptions, cancellationToken);
+            await using FileStream stream = File.OpenRead(_filePath);
+            List<MemoryItem>? items = await JsonSerializer.DeserializeAsync<List<MemoryItem>>(stream, JsonOptions, cancellationToken);
             return items ?? new List<MemoryItem>();
         }
         catch (JsonException)
@@ -128,7 +128,7 @@ public sealed class JsonMemoryStore : IMemoryStore
 
     private async Task SaveAsync(List<MemoryItem> items, CancellationToken cancellationToken)
     {
-        await using var stream = File.Create(_filePath);
+        await using FileStream stream = File.Create(_filePath);
         await JsonSerializer.SerializeAsync(stream, items, JsonOptions, cancellationToken);
     }
 }

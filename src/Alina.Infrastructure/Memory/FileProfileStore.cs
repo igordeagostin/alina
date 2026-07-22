@@ -19,7 +19,7 @@ public sealed class FileProfileStore : IProfileStore
             return null;
         }
 
-        var content = await File.ReadAllTextAsync(_preferencesFile, cancellationToken);
+        string content = await File.ReadAllTextAsync(_preferencesFile, cancellationToken);
         return string.IsNullOrWhiteSpace(content) ? null : content;
     }
 }

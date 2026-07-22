@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Alina.Core.Permissoes;
@@ -67,13 +68,13 @@ public sealed class ClaudeCodeTool : ToolBase
             return "Erro: nenhuma tarefa informada para o Claude Code.";
         }
 
-        var directory = ResolveWorkingDirectory(workingDirectory);
+        string? directory = ResolveWorkingDirectory(workingDirectory);
         if (directory is not null && !Directory.Exists(directory))
         {
             return $"Erro: diretório de trabalho não encontrado: {directory}";
         }
 
-        var confirmed = await EnsureConfirmedAsync(
+        bool confirmed = await EnsureConfirmedAsync(
             "Delegar tarefa ao Claude Code (pode alterar arquivos e rodar comandos)",
             $"{task}\n   (dir: {directory ?? Environment.CurrentDirectory})",
             cancellationToken);
@@ -97,14 +98,14 @@ public sealed class ClaudeCodeTool : ToolBase
             return "Erro: nenhuma tarefa informada para o Claude Code.";
         }
 
-        var directory = ResolveWorkingDirectory(workingDirectory);
+        string? directory = ResolveWorkingDirectory(workingDirectory);
         if (directory is not null && !Directory.Exists(directory))
         {
             return $"Erro: diretório de trabalho não encontrado: {directory}";
         }
 
-        var permissao = await ResolverPermissaoAsync(cancellationToken);
-        var psi = BuildStartInfo(directory, permissao);
+        ConfigPermissao? permissao = await ResolverPermissaoAsync(cancellationToken);
+        ProcessStartInfo psi = BuildStartInfo(directory, permissao);
 
         if (_contexto is not null)
         {
@@ -113,14 +114,14 @@ public sealed class ClaudeCodeTool : ToolBase
 
         try
         {
-            using var process = new Process { StartInfo = psi };
+            using Process process = new Process { StartInfo = psi };
             process.Start();
 
             // Passa a tarefa via stdin (evita problemas de escaping em prompts longos).
             await process.StandardInput.WriteAsync(task);
             process.StandardInput.Close();
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
 
             return _options.Streaming
@@ -143,8 +144,8 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private async Task<string> LerStreamingAsync(Process process, CancellationToken cancellationToken)
     {
-        var stderr = new StringBuilder();
-        var stderrTask = Task.Run(async () =>
+        StringBuilder stderr = new StringBuilder();
+        Task stderrTask = Task.Run(async () =>
         {
             string? linha;
             while ((linha = await process.StandardError.ReadLineAsync(CancellationToken.None)) is not null)
@@ -153,7 +154,7 @@ public sealed class ClaudeCodeTool : ToolBase
             }
         });
 
-        var acumulado = new ResultadoAcumulado();
+        ResultadoAcumulado acumulado = new ResultadoAcumulado();
         void OnEvento(EventoProgressoClaudeCode e) => Progresso?.Invoke(e);
 
         try
@@ -187,8 +188,8 @@ public sealed class ClaudeCodeTool : ToolBase
         int exitCode,
         Action<EventoProgressoClaudeCode>? onEvento)
     {
-        var acumulado = new ResultadoAcumulado();
-        foreach (var linha in linhas)
+        ResultadoAcumulado acumulado = new ResultadoAcumulado();
+        foreach (string linha in linhas)
         {
             ProcessarEventoStreaming(linha, acumulado, onEvento);
         }
@@ -198,8 +199,8 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private async Task<string> LerJsonUnicoAsync(Process process, CancellationToken cancellationToken)
     {
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        Task<string> stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
         try
         {
@@ -233,9 +234,9 @@ public sealed class ClaudeCodeTool : ToolBase
 
         using (doc)
         {
-            var root = doc.RootElement;
+            JsonElement root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object ||
-                !root.TryGetProperty("type", out var tipoEl) ||
+                !root.TryGetProperty("type", out JsonElement tipoEl) ||
                 tipoEl.ValueKind != JsonValueKind.String)
             {
                 return;
@@ -260,22 +261,22 @@ public sealed class ClaudeCodeTool : ToolBase
 
                 case "result":
                     acumulado.Subtype = LerString(root, "subtype");
-                    acumulado.IsError = root.TryGetProperty("is_error", out var errEl) &&
+                    acumulado.IsError = root.TryGetProperty("is_error", out JsonElement errEl) &&
                                         errEl.ValueKind is JsonValueKind.True;
                     acumulado.Result = LerString(root, "result");
-                    if (root.TryGetProperty("total_cost_usd", out var custoEl) && custoEl.ValueKind is JsonValueKind.Number)
+                    if (root.TryGetProperty("total_cost_usd", out JsonElement custoEl) && custoEl.ValueKind is JsonValueKind.Number)
                     {
                         acumulado.Cost = custoEl.GetDouble();
                     }
-                    if (root.TryGetProperty("num_turns", out var turnosEl) && turnosEl.ValueKind is JsonValueKind.Number)
+                    if (root.TryGetProperty("num_turns", out JsonElement turnosEl) && turnosEl.ValueKind is JsonValueKind.Number)
                     {
                         acumulado.Turns = turnosEl.GetInt32();
                     }
-                    if (root.TryGetProperty("duration_ms", out var durEl) && durEl.ValueKind is JsonValueKind.Number)
+                    if (root.TryGetProperty("duration_ms", out JsonElement durEl) && durEl.ValueKind is JsonValueKind.Number)
                     {
                         acumulado.DurationMs = durEl.GetInt64();
                     }
-                    if (root.TryGetProperty("permission_denials", out var denEl) && denEl.ValueKind is JsonValueKind.Array)
+                    if (root.TryGetProperty("permission_denials", out JsonElement denEl) && denEl.ValueKind is JsonValueKind.Array)
                     {
                         acumulado.PermissionDenials = denEl.GetArrayLength();
                     }
@@ -287,19 +288,19 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private static void ProcessarConteudoAssistente(JsonElement root, Action<EventoProgressoClaudeCode>? onEvento)
     {
-        if (!root.TryGetProperty("message", out var msg) ||
-            !msg.TryGetProperty("content", out var conteudo) ||
+        if (!root.TryGetProperty("message", out JsonElement msg) ||
+            !msg.TryGetProperty("content", out JsonElement conteudo) ||
             conteudo.ValueKind != JsonValueKind.Array)
         {
             return;
         }
 
-        foreach (var bloco in conteudo.EnumerateArray())
+        foreach (JsonElement bloco in conteudo.EnumerateArray())
         {
             switch (LerString(bloco, "type"))
             {
                 case "text":
-                    var texto = LerString(bloco, "text");
+                    string? texto = LerString(bloco, "text");
                     if (!string.IsNullOrWhiteSpace(texto))
                     {
                         Emitir(onEvento, TipoEventoClaudeCode.Texto, texto!.Trim());
@@ -315,21 +316,21 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private static void ProcessarResultadoFerramenta(JsonElement root, Action<EventoProgressoClaudeCode>? onEvento)
     {
-        if (!root.TryGetProperty("message", out var msg) ||
-            !msg.TryGetProperty("content", out var conteudo) ||
+        if (!root.TryGetProperty("message", out JsonElement msg) ||
+            !msg.TryGetProperty("content", out JsonElement conteudo) ||
             conteudo.ValueKind != JsonValueKind.Array)
         {
             return;
         }
 
-        foreach (var bloco in conteudo.EnumerateArray())
+        foreach (JsonElement bloco in conteudo.EnumerateArray())
         {
             if (LerString(bloco, "type") != "tool_result")
             {
                 continue;
             }
 
-            var preview = ExtrairTextoResultado(bloco);
+            string preview = ExtrairTextoResultado(bloco);
             if (!string.IsNullOrWhiteSpace(preview))
             {
                 Emitir(onEvento, TipoEventoClaudeCode.ResultadoFerramenta, Resumir(preview!, 200));
@@ -339,16 +340,16 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private static string DescreverFerramenta(JsonElement toolUse)
     {
-        var nome = LerString(toolUse, "name") ?? "ferramenta";
-        if (!toolUse.TryGetProperty("input", out var input) || input.ValueKind != JsonValueKind.Object)
+        string nome = LerString(toolUse, "name") ?? "ferramenta";
+        if (!toolUse.TryGetProperty("input", out JsonElement input) || input.ValueKind != JsonValueKind.Object)
         {
             return $"Usando {nome}…";
         }
 
         // Campos mais comuns que ajudam a descrever a ação sem despejar o input inteiro.
-        foreach (var chave in new[] { "command", "file_path", "path", "pattern", "url", "description" })
+        foreach (string? chave in new[] { "command", "file_path", "path", "pattern", "url", "description" })
         {
-            var valor = LerString(input, chave);
+            string? valor = LerString(input, chave);
             if (!string.IsNullOrWhiteSpace(valor))
             {
                 return $"Usando {nome}: {Resumir(valor!, 160)}";
@@ -360,7 +361,7 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private static string ExtrairTextoResultado(JsonElement toolResult)
     {
-        if (!toolResult.TryGetProperty("content", out var conteudo))
+        if (!toolResult.TryGetProperty("content", out JsonElement conteudo))
         {
             return string.Empty;
         }
@@ -372,10 +373,10 @@ public sealed class ClaudeCodeTool : ToolBase
 
         if (conteudo.ValueKind == JsonValueKind.Array)
         {
-            var sb = new StringBuilder();
-            foreach (var bloco in conteudo.EnumerateArray())
+            StringBuilder sb = new StringBuilder();
+            foreach (JsonElement bloco in conteudo.EnumerateArray())
             {
-                var texto = LerString(bloco, "text");
+                string? texto = LerString(bloco, "text");
                 if (!string.IsNullOrWhiteSpace(texto))
                 {
                     sb.Append(texto);
@@ -392,26 +393,26 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private static string? LerString(JsonElement elemento, string propriedade)
         => elemento.ValueKind == JsonValueKind.Object &&
-           elemento.TryGetProperty(propriedade, out var v) &&
+           elemento.TryGetProperty(propriedade, out JsonElement v) &&
            v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
 
     private static string Resumir(string texto, int limite)
     {
-        var t = texto.Replace('\n', ' ').Replace('\r', ' ').Trim();
+        string t = texto.Replace('\n', ' ').Replace('\r', ' ').Trim();
         return t.Length <= limite ? t : t[..limite] + "…";
     }
 
     private static string MontarResumo(ResultadoAcumulado acumulado, string stderr, int exitCode)
     {
-        var sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
 
         if (acumulado.Result is null && string.IsNullOrWhiteSpace(stderr) && acumulado.Turns is null)
         {
-            var raw = stderr.Trim();
-            var hint0 = DiagnoseHint(raw);
-            var msg = $"[Claude Code exit {exitCode}] Não foi possível interpretar a saída do streaming.";
+            string raw = stderr.Trim();
+            string? hint0 = DiagnoseHint(raw);
+            string msg = $"[Claude Code exit {exitCode}] Não foi possível interpretar a saída do streaming.";
             return hint0 is null ? msg : $"{msg}\n\n{hint0}";
         }
 
@@ -420,12 +421,12 @@ public sealed class ClaudeCodeTool : ToolBase
             sb.AppendLine($"⚠ Claude Code retornou erro (subtype: {acumulado.Subtype ?? "?"}).");
         }
 
-        var body = string.IsNullOrWhiteSpace(acumulado.Result) ? "(sem texto de resultado)" : acumulado.Result!.Trim();
+        string body = string.IsNullOrWhiteSpace(acumulado.Result) ? "(sem texto de resultado)" : acumulado.Result!.Trim();
         sb.AppendLine(body);
 
         if (acumulado.IsError)
         {
-            var hint = DiagnoseHint($"{body}\n{stderr}\n{acumulado.Subtype}");
+            string? hint = DiagnoseHint($"{body}\n{stderr}\n{acumulado.Subtype}");
             if (hint is not null)
             {
                 sb.AppendLine($"\n{hint}");
@@ -465,13 +466,13 @@ public sealed class ClaudeCodeTool : ToolBase
             return null;
         }
 
-        var url = await _servidorPermissao.IniciarAsync(cancellationToken);
+        string url = await _servidorPermissao.IniciarAsync(cancellationToken);
         return new ConfigPermissao(url, _servidorPermissao.NomeServidor, _servidorPermissao.NomeFerramenta);
     }
 
     private ProcessStartInfo BuildStartInfo(string? workingDirectory, ConfigPermissao? permissao)
     {
-        var psi = new ProcessStartInfo
+        ProcessStartInfo psi = new ProcessStartInfo
         {
             FileName = _options.Executable,
             RedirectStandardInput = true,
@@ -489,6 +490,12 @@ public sealed class ClaudeCodeTool : ToolBase
         psi.ArgumentList.Add("-p");
         psi.ArgumentList.Add("--output-format");
         psi.ArgumentList.Add(_options.Streaming ? "stream-json" : "json");
+
+        if (!string.IsNullOrWhiteSpace(_options.Model))
+        {
+            psi.ArgumentList.Add("--model");
+            psi.ArgumentList.Add(_options.Model);
+        }
 
         if (_options.Streaming)
         {
@@ -520,7 +527,7 @@ public sealed class ClaudeCodeTool : ToolBase
             psi.ArgumentList.Add(_options.MaxTurns.ToString());
         }
 
-        foreach (var arg in _options.ExtraArgs)
+        foreach (string arg in _options.ExtraArgs)
         {
             psi.ArgumentList.Add(arg);
         }
@@ -548,25 +555,25 @@ public sealed class ClaudeCodeTool : ToolBase
 
         if (parsed is null)
         {
-            var raw = string.Join("\n", new[] { stdout, stderr }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
-            var hint = DiagnoseHint(raw);
-            var message = $"[Claude Code exit {exitCode}] Não foi possível interpretar a saída JSON.\n{raw}";
+            string raw = string.Join("\n", new[] { stdout, stderr }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+            string? hint = DiagnoseHint(raw);
+            string message = $"[Claude Code exit {exitCode}] Não foi possível interpretar a saída JSON.\n{raw}";
             return hint is null ? message : $"{message}\n\n{hint}";
         }
 
-        var sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
 
         if (parsed.IsError)
         {
             sb.AppendLine($"⚠ Claude Code retornou erro (subtype: {parsed.Subtype ?? "?"}).");
         }
 
-        var body = string.IsNullOrWhiteSpace(parsed.Result) ? "(sem texto de resultado)" : parsed.Result!.Trim();
+        string body = string.IsNullOrWhiteSpace(parsed.Result) ? "(sem texto de resultado)" : parsed.Result!.Trim();
         sb.AppendLine(body);
 
         if (parsed.IsError)
         {
-            var hint = DiagnoseHint($"{body}\n{stderr}\n{parsed.Subtype}");
+            string? hint = DiagnoseHint($"{body}\n{stderr}\n{parsed.Subtype}");
             if (hint is not null)
             {
                 sb.AppendLine($"\n{hint}");
@@ -589,8 +596,8 @@ public sealed class ClaudeCodeTool : ToolBase
 
     private static void AppendRodape(StringBuilder sb, int? turns, long? durationMs, double? cost)
     {
-        var inv = System.Globalization.CultureInfo.InvariantCulture;
-        var footer = new List<string>();
+        CultureInfo inv = System.Globalization.CultureInfo.InvariantCulture;
+        List<string> footer = new List<string>();
         if (turns is { } t) footer.Add($"{t} turno(s)");
         if (durationMs is { } ms) footer.Add(string.Create(inv, $"{ms / 1000.0:0.0}s"));
         if (cost is { } c) footer.Add(string.Create(inv, $"${c:0.0000}"));
@@ -603,7 +610,7 @@ public sealed class ClaudeCodeTool : ToolBase
     /// <summary>Detecta causas comuns de falha e devolve uma dica acionável (ou null).</summary>
     internal static string? DiagnoseHint(string text)
     {
-        var t = (text ?? string.Empty).ToLowerInvariant();
+        string t = (text ?? string.Empty).ToLowerInvariant();
 
         if (t.Contains("login") || t.Contains("authenticat") || t.Contains("unauthor") ||
             t.Contains("api key") || t.Contains("api_key") || t.Contains("oauth") || t.Contains("credential"))
@@ -630,7 +637,7 @@ public sealed class ClaudeCodeTool : ToolBase
         }
 
         // A saída pode conter linhas extras; pega a última linha que é um objeto JSON.
-        var line = stdout
+        string? line = stdout
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .LastOrDefault(l => l.StartsWith('{') && l.EndsWith('}'));
 

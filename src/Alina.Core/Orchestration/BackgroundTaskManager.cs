@@ -11,8 +11,8 @@ public sealed class BackgroundTaskManager : IBackgroundTaskManager, IDisposable
 
     public BackgroundTask Start(string description, Func<CancellationToken, Task<string>> work)
     {
-        var task = new BackgroundTask { Description = description };
-        var cts = new CancellationTokenSource();
+        BackgroundTask task = new BackgroundTask { Description = description };
+        CancellationTokenSource cts = new CancellationTokenSource();
         _tasks[task.Id] = new TrackedTask(task, cts);
 
         // Fire-and-forget: roda em background e atualiza o estado ao terminar.
@@ -20,7 +20,7 @@ public sealed class BackgroundTaskManager : IBackgroundTaskManager, IDisposable
         {
             try
             {
-                var result = await work(cts.Token);
+                string result = await work(cts.Token);
                 task.Result = result;
                 task.Status = cts.IsCancellationRequested ? BackgroundTaskStatus.Cancelled : BackgroundTaskStatus.Completed;
             }
@@ -49,11 +49,11 @@ public sealed class BackgroundTaskManager : IBackgroundTaskManager, IDisposable
         _tasks.Values.Select(t => t.Task).OrderByDescending(t => t.CreatedAt).ToList();
 
     public BackgroundTask? Get(string id) =>
-        _tasks.TryGetValue(id, out var tracked) ? tracked.Task : null;
+        _tasks.TryGetValue(id, out TrackedTask? tracked) ? tracked.Task : null;
 
     public bool Cancel(string id)
     {
-        if (!_tasks.TryGetValue(id, out var tracked) || tracked.Task.IsFinished)
+        if (!_tasks.TryGetValue(id, out TrackedTask? tracked) || tracked.Task.IsFinished)
         {
             return false;
         }
@@ -64,7 +64,7 @@ public sealed class BackgroundTaskManager : IBackgroundTaskManager, IDisposable
 
     public void Dispose()
     {
-        foreach (var tracked in _tasks.Values)
+        foreach (TrackedTask tracked in _tasks.Values)
         {
             try
             {

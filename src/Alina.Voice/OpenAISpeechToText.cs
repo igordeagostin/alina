@@ -1,3 +1,4 @@
+using System.ClientModel;
 using OpenAI;
 using OpenAI.Audio;
 
@@ -17,15 +18,15 @@ public sealed class OpenAISpeechToText : ISpeechToText
 
     public async Task<string> TranscribeAsync(byte[] wavAudio, CancellationToken cancellationToken = default)
     {
-        using var stream = new MemoryStream(wavAudio);
+        using MemoryStream stream = new MemoryStream(wavAudio);
 
-        var options = new AudioTranscriptionOptions();
+        AudioTranscriptionOptions options = new AudioTranscriptionOptions();
         if (!string.IsNullOrWhiteSpace(_options.Language))
         {
             options.Language = _options.Language;
         }
 
-        var result = await _client.TranscribeAudioAsync(stream, "audio.wav", options, cancellationToken);
+        ClientResult<AudioTranscription> result = await _client.TranscribeAudioAsync(stream, "audio.wav", options, cancellationToken);
         return result.Value.Text?.Trim() ?? string.Empty;
     }
 }

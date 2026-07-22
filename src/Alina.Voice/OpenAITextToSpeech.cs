@@ -1,3 +1,4 @@
+using System.ClientModel;
 using OpenAI;
 using OpenAI.Audio;
 
@@ -17,15 +18,15 @@ public sealed class OpenAITextToSpeech : ITextToSpeech
 
     public async Task<byte[]> SynthesizeAsync(string text, CancellationToken cancellationToken = default)
     {
-        var options = new SpeechGenerationOptions
+        SpeechGenerationOptions options = new SpeechGenerationOptions
         {
             ResponseFormat = GeneratedSpeechFormat.Mp3,
             SpeedRatio = _options.Speed,
         };
 
-        var voice = new GeneratedSpeechVoice(_options.Voice);
+        GeneratedSpeechVoice voice = new GeneratedSpeechVoice(_options.Voice);
 
-        var result = await _client.GenerateSpeechAsync(text, voice, options, cancellationToken);
+        ClientResult<BinaryData> result = await _client.GenerateSpeechAsync(text, voice, options, cancellationToken);
         return result.Value.ToArray();
     }
 }

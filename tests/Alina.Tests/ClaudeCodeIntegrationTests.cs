@@ -15,20 +15,20 @@ public sealed class ClaudeCodeIntegrationTests
     [Fact(Skip = "Integração real: executa o Claude Code (custa dinheiro). Rodar manualmente.")]
     public async Task Cria_arquivo_em_diretorio_temporario()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "alina-cc-" + Guid.NewGuid().ToString("n"));
+        string dir = Path.Combine(Path.GetTempPath(), "alina-cc-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(dir);
 
         try
         {
-            var tool = new ClaudeCodeTool(
+            ClaudeCodeTool tool = new ClaudeCodeTool(
                 new FakeConfirmationService(result: true),
                 new ClaudeCodeOptions { PermissionMode = "acceptEdits", MaxTurns = 5 });
 
-            var result = await tool.RunAsync(
+            string result = await tool.RunAsync(
                 "Crie um arquivo chamado hello.txt com exatamente o conteúdo: ola alina",
                 dir);
 
-            var file = Path.Combine(dir, "hello.txt");
+            string file = Path.Combine(dir, "hello.txt");
             Assert.True(File.Exists(file), $"esperava hello.txt criado. Saída:\n{result}");
             Assert.Contains("ola alina", await File.ReadAllTextAsync(file), StringComparison.OrdinalIgnoreCase);
         }
@@ -44,31 +44,31 @@ public sealed class ClaudeCodeIntegrationTests
     [Fact(Skip = "Integração real: streaming + permissão interativa via servidor MCP. Rodar manualmente.")]
     public async Task Permissao_interativa_pergunta_e_prossegue_com_streaming()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "alina-cc-" + Guid.NewGuid().ToString("n"));
+        string dir = Path.Combine(Path.GetTempPath(), "alina-cc-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(dir);
 
         // Aprova automaticamente cada pedido de permissão que chegar ao servidor MCP.
-        var contexto = new ContextoPermissao();
-        var politica = new PoliticaPermissao(Path.Combine(dir, "permissoes.json"));
-        var confirmacao = new ConfirmacaoPermissaoBasica(new FakeConfirmationService(result: true));
-        await using var servidor = new ServidorPermissaoMcp(politica, confirmacao, contexto);
+        ContextoPermissao contexto = new ContextoPermissao();
+        PoliticaPermissao politica = new PoliticaPermissao(Path.Combine(dir, "permissoes.json"));
+        ConfirmacaoPermissaoBasica confirmacao = new ConfirmacaoPermissaoBasica(new FakeConfirmationService(result: true));
+        await using ServidorPermissaoMcp servidor = new ServidorPermissaoMcp(politica, confirmacao, contexto);
 
         try
         {
-            var tool = new ClaudeCodeTool(
+            ClaudeCodeTool tool = new ClaudeCodeTool(
                 new FakeConfirmationService(result: true),
                 new ClaudeCodeOptions { Streaming = true, PermissaoInterativa = true, MaxTurns = 8 },
                 servidor,
                 contexto);
 
-            var eventos = new List<EventoProgressoClaudeCode>();
+            List<EventoProgressoClaudeCode> eventos = new List<EventoProgressoClaudeCode>();
             tool.Progresso += eventos.Add;
 
-            var result = await tool.RunAsync(
+            string result = await tool.RunAsync(
                 "Crie um arquivo chamado hello.txt com exatamente o conteúdo: ola alina",
                 dir);
 
-            var file = Path.Combine(dir, "hello.txt");
+            string file = Path.Combine(dir, "hello.txt");
             Assert.True(File.Exists(file), $"esperava hello.txt criado. Saída:\n{result}");
             Assert.NotEmpty(eventos);
             Assert.Contains(eventos, e => e.Tipo == TipoEventoClaudeCode.Ferramenta);

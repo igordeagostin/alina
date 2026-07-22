@@ -15,19 +15,19 @@ public static class Autostart
     {
         get
         {
-            using var chave = Registry.CurrentUser.OpenSubKey(Chave);
+            using RegistryKey? chave = Registry.CurrentUser.OpenSubKey(Chave);
             return chave?.GetValue(Nome) is not null;
         }
     }
 
     public static void Definir(bool ativo)
     {
-        using var chave = Registry.CurrentUser.OpenSubKey(Chave, writable: true)
+        using RegistryKey chave = Registry.CurrentUser.OpenSubKey(Chave, writable: true)
             ?? Registry.CurrentUser.CreateSubKey(Chave);
 
         if (ativo)
         {
-            var caminho = Environment.ProcessPath;
+            string? caminho = Environment.ProcessPath;
             if (!string.IsNullOrEmpty(caminho))
             {
                 chave.SetValue(Nome, $"\"{caminho}\" --tray");

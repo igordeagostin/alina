@@ -18,7 +18,7 @@ internal sealed class StatusTrackingFunction : DelegatingAIFunction
     protected override async ValueTask<object?> InvokeCoreAsync(
         AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        var previous = _status.Current;
+        AssistantState previous = _status.Current;
         _status.Set(AssistantState.Executing);
         try
         {

@@ -18,6 +18,8 @@ memória permanente, voz push-to-talk, plugins declarativos e execução em back
 - Siga o estilo do código ao redor: mesma indentação, convenções de nomenclatura e idioma.
 - C# moderno: `nullable` e `implicit usings` habilitados, `sealed` por padrão, expressões
   concisas. Um arquivo por tipo, namespace file-scoped.
+- **Nunca use `var`.** Sempre declare o tipo explícito, mesmo quando ele for aparente pelo
+  lado direito da atribuição. A regra é reforçada pelo `.editorconfig` (IDE0008 como erro).
 
 ## Segredos e chaves de API
 

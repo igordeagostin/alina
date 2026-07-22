@@ -40,14 +40,14 @@ public sealed class VozConfirmationService : IConfirmationService
 
     public async Task<bool> ConfirmAsync(string action, string? details = null, CancellationToken cancellationToken = default)
     {
-        var pergunta = MontarPergunta(action, details);
+        string pergunta = MontarPergunta(action, details);
         await FalarAsync(pergunta, cancellationToken);
 
-        var tentativas = Math.Max(1, _options.TentativasConfirmacaoVoz);
-        for (var i = 0; i < tentativas; i++)
+        int tentativas = Math.Max(1, _options.TentativasConfirmacaoVoz);
+        for (int i = 0; i < tentativas; i++)
         {
-            var texto = await CapturarRespostaAsync(cancellationToken);
-            var decisao = InterpretarResposta(texto, _options.PalavrasSim, _options.PalavrasNao);
+            string? texto = await CapturarRespostaAsync(cancellationToken);
+            bool? decisao = InterpretarResposta(texto, _options.PalavrasSim, _options.PalavrasNao);
 
             if (decisao is true)
             {
@@ -78,8 +78,8 @@ public sealed class VozConfirmationService : IConfirmationService
 
     private async Task<string?> CapturarRespostaAsync(CancellationToken cancellationToken)
     {
-        var janela = TimeSpan.FromSeconds(Math.Max(2, _options.SegundosRespostaConfirmacao));
-        var audio = await _recorder.RecordAsync(
+        TimeSpan janela = TimeSpan.FromSeconds(Math.Max(2, _options.SegundosRespostaConfirmacao));
+        byte[] audio = await _recorder.RecordAsync(
             ct => Task.Delay(janela, ct),
             nivel: null,
             cancellationToken);
@@ -90,13 +90,13 @@ public sealed class VozConfirmationService : IConfirmationService
     private async Task FalarAsync(string texto, CancellationToken cancellationToken)
     {
         Falou?.Invoke(texto);
-        var mp3 = await _tts.SynthesizeAsync(texto, cancellationToken);
+        byte[] mp3 = await _tts.SynthesizeAsync(texto, cancellationToken);
         await _player.PlayMp3Async(mp3, cancellationToken);
     }
 
     private static string MontarPergunta(string action, string? details)
     {
-        var sb = new StringBuilder(action.TrimEnd('.', ' '));
+        StringBuilder sb = new StringBuilder(action.TrimEnd('.', ' '));
         sb.Append('.');
         if (!string.IsNullOrWhiteSpace(details))
         {
@@ -117,14 +117,14 @@ public sealed class VozConfirmationService : IConfirmationService
             return null;
         }
 
-        var tokens = Tokenizar(texto);
+        List<string> tokens = Tokenizar(texto);
         if (tokens.Count == 0)
         {
             return null;
         }
 
-        var conjunto = new HashSet<string>(tokens);
-        var frase = string.Join(' ', tokens);
+        HashSet<string> conjunto = new HashSet<string>(tokens);
+        string frase = string.Join(' ', tokens);
 
         if (ContemAlgum(conjunto, frase, palavrasNao))
         {
@@ -141,9 +141,9 @@ public sealed class VozConfirmationService : IConfirmationService
 
     private static bool ContemAlgum(HashSet<string> tokens, string frase, IEnumerable<string> termos)
     {
-        foreach (var termo in termos)
+        foreach (string termo in termos)
         {
-            var alvo = Normalizar(termo);
+            string alvo = Normalizar(termo);
             if (string.IsNullOrEmpty(alvo))
             {
                 continue;
@@ -151,7 +151,7 @@ public sealed class VozConfirmationService : IConfirmationService
 
             // Termo composto (ex.: "melhor nao") casa como substring da frase normalizada;
             // termo simples casa por token exato para evitar falsos positivos.
-            var casa = alvo.Contains(' ') ? frase.Contains(alvo, StringComparison.Ordinal) : tokens.Contains(alvo);
+            bool casa = alvo.Contains(' ') ? frase.Contains(alvo, StringComparison.Ordinal) : tokens.Contains(alvo);
             if (casa)
             {
                 return true;
@@ -163,7 +163,7 @@ public sealed class VozConfirmationService : IConfirmationService
 
     private static List<string> Tokenizar(string texto)
     {
-        var normalizado = Normalizar(texto);
+        string normalizado = Normalizar(texto);
         return normalizado
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
@@ -171,10 +171,10 @@ public sealed class VozConfirmationService : IConfirmationService
 
     private static string Normalizar(string texto)
     {
-        var semAcento = new StringBuilder(texto.Length);
-        foreach (var c in texto.Normalize(NormalizationForm.FormD))
+        StringBuilder semAcento = new StringBuilder(texto.Length);
+        foreach (char c in texto.Normalize(NormalizationForm.FormD))
         {
-            var categoria = CharUnicodeInfo.GetUnicodeCategory(c);
+            UnicodeCategory categoria = CharUnicodeInfo.GetUnicodeCategory(c);
             if (categoria == UnicodeCategory.NonSpacingMark)
             {
                 continue;

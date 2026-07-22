@@ -15,7 +15,7 @@ public sealed class ConfirmacaoPermissaoBasica : IConfirmacaoPermissao
 
     public async Task<RespostaConfirmacaoPermissao> ConfirmarAsync(PedidoPermissao pedido, CancellationToken cancellationToken = default)
     {
-        var autorizado = await _confirmacao.ConfirmAsync("Permissão solicitada pelo Claude Code", pedido.Descricao, cancellationToken);
+        bool autorizado = await _confirmacao.ConfirmAsync("Permissão solicitada pelo Claude Code", pedido.Descricao, cancellationToken);
         return autorizado ? RespostaConfirmacaoPermissao.PermitidaUmaVez : RespostaConfirmacaoPermissao.Negada;
     }
 }

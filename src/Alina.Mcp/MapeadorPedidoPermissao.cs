@@ -11,9 +11,9 @@ internal static class MapeadorPedidoPermissao
 {
     public static PedidoPermissao Mapear(string toolName, JsonElement input, string? diretorioAtual)
     {
-        var ferramenta = string.IsNullOrWhiteSpace(toolName) ? "ferramenta" : toolName;
-        var comando = LerString(input, "command");
-        var caminho = LerString(input, "file_path")
+        string ferramenta = string.IsNullOrWhiteSpace(toolName) ? "ferramenta" : toolName;
+        string? comando = LerString(input, "command");
+        string? caminho = LerString(input, "file_path")
                       ?? LerString(input, "path")
                       ?? LerString(input, "notebook_path");
 
@@ -29,7 +29,7 @@ internal static class MapeadorPedidoPermissao
 
     private static string? LerString(JsonElement elemento, string propriedade)
         => elemento.ValueKind == JsonValueKind.Object &&
-           elemento.TryGetProperty(propriedade, out var v) &&
+           elemento.TryGetProperty(propriedade, out JsonElement v) &&
            v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;

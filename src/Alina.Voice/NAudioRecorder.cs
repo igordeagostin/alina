@@ -11,11 +11,11 @@ public sealed class NAudioRecorder : IAudioRecorder
 {
     public async Task<byte[]> RecordAsync(Func<CancellationToken, Task> waitForStop, IProgress<float>? nivel = null, CancellationToken cancellationToken = default)
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"alina-rec-{Guid.NewGuid():n}.wav");
-        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string tempPath = Path.Combine(Path.GetTempPath(), $"alina-rec-{Guid.NewGuid():n}.wav");
+        TaskCompletionSource stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        using var waveIn = new WaveInEvent { WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 30 };
-        var writer = new WaveFileWriter(tempPath, waveIn.WaveFormat);
+        using WaveInEvent waveIn = new WaveInEvent { WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 30 };
+        WaveFileWriter writer = new WaveFileWriter(tempPath, waveIn.WaveFormat);
 
         waveIn.DataAvailable += (_, e) =>
         {
@@ -61,10 +61,10 @@ public sealed class NAudioRecorder : IAudioRecorder
 
     private static float PicoNormalizado(byte[] buffer, int bytes)
     {
-        var pico = 0;
-        for (var i = 0; i + 1 < bytes; i += 2)
+        int pico = 0;
+        for (int i = 0; i + 1 < bytes; i += 2)
         {
-            var amostra = Math.Abs((short)(buffer[i] | (buffer[i + 1] << 8)));
+            short amostra = Math.Abs((short)(buffer[i] | (buffer[i + 1] << 8)));
             if (amostra > pico)
             {
                 pico = amostra;

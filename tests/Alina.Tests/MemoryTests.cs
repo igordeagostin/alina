@@ -17,12 +17,12 @@ public sealed class JsonMemoryStoreTests : IDisposable
     [Fact]
     public async Task Add_persiste_e_GetAll_recupera()
     {
-        var store = new JsonMemoryStore(_file);
-        var item = await store.AddAsync("Sempre uso Clean Architecture", "convenção");
+        JsonMemoryStore store = new JsonMemoryStore(_file);
+        MemoryItem item = await store.AddAsync("Sempre uso Clean Architecture", "convenção");
 
         // Nova instância lê do disco.
-        var reloaded = new JsonMemoryStore(_file);
-        var all = await reloaded.GetAllAsync();
+        JsonMemoryStore reloaded = new JsonMemoryStore(_file);
+        IReadOnlyList<MemoryItem> all = await reloaded.GetAllAsync();
 
         Assert.Single(all);
         Assert.Equal("Sempre uso Clean Architecture", all[0].Content);
@@ -33,12 +33,12 @@ public sealed class JsonMemoryStoreTests : IDisposable
     [Fact]
     public async Task Remove_apaga_pelo_id()
     {
-        var store = new JsonMemoryStore(_file);
-        var a = await store.AddAsync("fato A");
+        JsonMemoryStore store = new JsonMemoryStore(_file);
+        MemoryItem a = await store.AddAsync("fato A");
         await store.AddAsync("fato B");
 
-        var removed = await store.RemoveAsync(a.Id);
-        var all = await store.GetAllAsync();
+        bool removed = await store.RemoveAsync(a.Id);
+        IReadOnlyList<MemoryItem> all = await store.GetAllAsync();
 
         Assert.True(removed);
         Assert.Single(all);
@@ -48,13 +48,13 @@ public sealed class JsonMemoryStoreTests : IDisposable
     [Fact]
     public async Task Remove_id_inexistente_retorna_false()
     {
-        var store = new JsonMemoryStore(_file);
+        JsonMemoryStore store = new JsonMemoryStore(_file);
         Assert.False(await store.RemoveAsync("naoexiste"));
     }
 
     public void Dispose()
     {
-        var dir = Path.GetDirectoryName(_file);
+        string? dir = Path.GetDirectoryName(_file);
         if (dir is not null && Directory.Exists(dir))
         {
             Directory.Delete(dir, recursive: true);
@@ -67,13 +67,13 @@ public sealed class MemoryToolsTests
     [Fact]
     public async Task RememberTool_salva_e_retorna_id()
     {
-        var memory = new InMemoryMemoryStore();
-        var tool = new RememberTool(new FakeConfirmationService(true), memory);
+        InMemoryMemoryStore memory = new InMemoryMemoryStore();
+        RememberTool tool = new RememberTool(new FakeConfirmationService(true), memory);
 
-        var result = await tool.RunAsync("Prefiro respostas curtas", "preferência");
+        string result = await tool.RunAsync("Prefiro respostas curtas", "preferência");
 
         Assert.Contains("Memorizado", result);
-        var all = await memory.GetAllAsync();
+        IReadOnlyList<MemoryItem> all = await memory.GetAllAsync();
         Assert.Single(all);
         Assert.Equal("Prefiro respostas curtas", all[0].Content);
     }
@@ -81,11 +81,11 @@ public sealed class MemoryToolsTests
     [Fact]
     public async Task ForgetTool_remove_item_existente()
     {
-        var memory = new InMemoryMemoryStore();
-        var item = await memory.AddAsync("algo temporário");
-        var tool = new ForgetTool(new FakeConfirmationService(true), memory);
+        InMemoryMemoryStore memory = new InMemoryMemoryStore();
+        MemoryItem item = await memory.AddAsync("algo temporário");
+        ForgetTool tool = new ForgetTool(new FakeConfirmationService(true), memory);
 
-        var result = await tool.RunAsync(item.Id);
+        string result = await tool.RunAsync(item.Id);
 
         Assert.Contains("esquecida", result, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(await memory.GetAllAsync());
@@ -94,11 +94,11 @@ public sealed class MemoryToolsTests
     [Fact]
     public async Task RecallTool_lista_memorias()
     {
-        var memory = new InMemoryMemoryStore();
+        InMemoryMemoryStore memory = new InMemoryMemoryStore();
         await memory.AddAsync("fato importante", "projeto");
-        var tool = new RecallTool(new FakeConfirmationService(true), memory);
+        RecallTool tool = new RecallTool(new FakeConfirmationService(true), memory);
 
-        var result = await tool.RunAsync();
+        string result = await tool.RunAsync();
 
         Assert.Contains("fato importante", result);
         Assert.Contains("projeto", result);
@@ -110,12 +110,12 @@ public sealed class SystemPromptMemoryTests
     [Fact]
     public void Build_detalha_memorias_relevantes_com_id()
     {
-        var detailed = new List<MemoryItem>
+        List<MemoryItem> detailed = new List<MemoryItem>
         {
             new() { Id = "abc12345", Content = "Usa .NET 10", Category = "stack" },
         };
 
-        var prompt = SystemPromptBuilder.Build(Array.Empty<ITool>(), preferences: null, memoryIndex: null, detailedMemories: detailed);
+        string prompt = SystemPromptBuilder.Build(Array.Empty<ITool>(), preferences: null, memoryIndex: null, detailedMemories: detailed);
 
         Assert.Contains("Usa .NET 10", prompt);
         Assert.Contains("abc12345", prompt);
@@ -124,12 +124,12 @@ public sealed class SystemPromptMemoryTests
     [Fact]
     public void Build_indice_mostra_titulo_mas_nao_o_conteudo_completo()
     {
-        var index = new List<MemoryIndexEntry>
+        List<MemoryIndexEntry> index = new List<MemoryIndexEntry>
         {
             new("id111111", MemoryKind.Fact, "stack", "Preferência de framework"),
         };
 
-        var prompt = SystemPromptBuilder.Build(Array.Empty<ITool>(), preferences: null, memoryIndex: index, detailedMemories: null);
+        string prompt = SystemPromptBuilder.Build(Array.Empty<ITool>(), preferences: null, memoryIndex: index, detailedMemories: null);
 
         Assert.Contains("id111111", prompt);
         Assert.Contains("Preferência de framework", prompt);
@@ -147,7 +147,7 @@ public sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embeddi
     public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(
         IEnumerable<string> values, EmbeddingGenerationOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var result = new GeneratedEmbeddings<Embedding<float>>(
+        GeneratedEmbeddings<Embedding<float>> result = new GeneratedEmbeddings<Embedding<float>>(
             values.Select(v => new Embedding<float>(_map(v))).ToList());
         return Task.FromResult(result);
     }
@@ -162,11 +162,11 @@ public sealed class MemoryRetrieverTests
     [Fact]
     public async Task GetIndex_nao_expoe_conteudo_completo()
     {
-        var store = new InMemoryMemoryStore();
+        InMemoryMemoryStore store = new InMemoryMemoryStore();
         await store.AddAsync(new MemoryItem { Title = "Deploy do X", Content = "passo a passo secreto", Kind = MemoryKind.Procedure });
-        var retriever = new MemoryRetriever(store);
+        MemoryRetriever retriever = new MemoryRetriever(store);
 
-        var index = await retriever.GetIndexAsync();
+        IReadOnlyList<MemoryIndexEntry> index = await retriever.GetIndexAsync();
 
         Assert.Single(index);
         Assert.Equal("Deploy do X", index[0].Title);
@@ -176,16 +176,16 @@ public sealed class MemoryRetrieverTests
     [Fact]
     public async Task Search_com_embeddings_ordena_por_similaridade()
     {
-        var store = new InMemoryMemoryStore();
-        var git = await store.AddAsync(new MemoryItem { Content = "git", Keywords = { "git" } });
-        var deploy = await store.AddAsync(new MemoryItem { Content = "deploy", Keywords = { "deploy" } });
+        InMemoryMemoryStore store = new InMemoryMemoryStore();
+        MemoryItem git = await store.AddAsync(new MemoryItem { Content = "git", Keywords = { "git" } });
+        MemoryItem deploy = await store.AddAsync(new MemoryItem { Content = "deploy", Keywords = { "deploy" } });
 
         // Vetores determinísticos: "git*" perto de (1,0), "deploy*" perto de (0,1).
-        var generator = new FakeEmbeddingGenerator(text =>
+        FakeEmbeddingGenerator generator = new FakeEmbeddingGenerator(text =>
             text.Contains("git", StringComparison.OrdinalIgnoreCase) ? new[] { 1f, 0f } : new[] { 0f, 1f });
-        var retriever = new MemoryRetriever(store, generator, "fake-model");
+        MemoryRetriever retriever = new MemoryRetriever(store, generator, "fake-model");
 
-        var results = await retriever.SearchAsync("como faço git status", topK: 1);
+        IReadOnlyList<MemoryItem> results = await retriever.SearchAsync("como faço git status", topK: 1);
 
         Assert.Single(results);
         Assert.Equal(git.Id, results[0].Id);
@@ -195,12 +195,12 @@ public sealed class MemoryRetrieverTests
     [Fact]
     public async Task Search_sem_generator_usa_fallback_keyword()
     {
-        var store = new InMemoryMemoryStore();
+        InMemoryMemoryStore store = new InMemoryMemoryStore();
         await store.AddAsync(new MemoryItem { Content = "Sempre uso Clean Architecture", Keywords = { "arquitetura" } });
-        var alvo = await store.AddAsync(new MemoryItem { Content = "O deploy do projeto usa Docker", Keywords = { "deploy", "docker" } });
-        var retriever = new MemoryRetriever(store); // sem embeddings
+        MemoryItem alvo = await store.AddAsync(new MemoryItem { Content = "O deploy do projeto usa Docker", Keywords = { "deploy", "docker" } });
+        MemoryRetriever retriever = new MemoryRetriever(store); // sem embeddings
 
-        var results = await retriever.SearchAsync("como fazer o deploy com docker", topK: 1);
+        IReadOnlyList<MemoryItem> results = await retriever.SearchAsync("como fazer o deploy com docker", topK: 1);
 
         Assert.Single(results);
         Assert.Equal(alvo.Id, results[0].Id);
@@ -209,13 +209,13 @@ public sealed class MemoryRetrieverTests
     [Fact]
     public async Task GetPinned_retorna_apenas_fixadas_e_Search_ignora_fixadas()
     {
-        var store = new InMemoryMemoryStore();
-        var pin = await store.AddAsync(new MemoryItem { Content = "regra fixa", Pinned = true, Keywords = { "regra" } });
+        InMemoryMemoryStore store = new InMemoryMemoryStore();
+        MemoryItem pin = await store.AddAsync(new MemoryItem { Content = "regra fixa", Pinned = true, Keywords = { "regra" } });
         await store.AddAsync(new MemoryItem { Content = "regra comum", Keywords = { "regra" } });
-        var retriever = new MemoryRetriever(store);
+        MemoryRetriever retriever = new MemoryRetriever(store);
 
-        var pinned = await retriever.GetPinnedAsync();
-        var search = await retriever.SearchAsync("regra", topK: 5);
+        IReadOnlyList<MemoryItem> pinned = await retriever.GetPinnedAsync();
+        IReadOnlyList<MemoryItem> search = await retriever.SearchAsync("regra", topK: 5);
 
         Assert.Single(pinned);
         Assert.Equal(pin.Id, pinned[0].Id);
@@ -228,16 +228,16 @@ public sealed class ProceduralMemoryToolTests
     [Fact]
     public async Task Memorizar_e_recuperar_procedimento_por_id()
     {
-        var store = new InMemoryMemoryStore();
-        var confirmation = new FakeConfirmationService(true);
-        var remember = new RememberProcedureTool(confirmation, store);
-        var retriever = new MemoryRetriever(store);
-        var retrieve = new RetrieveMemoryTool(confirmation, retriever);
+        InMemoryMemoryStore store = new InMemoryMemoryStore();
+        FakeConfirmationService confirmation = new FakeConfirmationService(true);
+        RememberProcedureTool remember = new RememberProcedureTool(confirmation, store);
+        MemoryRetriever retriever = new MemoryRetriever(store);
+        RetrieveMemoryTool retrieve = new RetrieveMemoryTool(confirmation, retriever);
 
-        var saved = await remember.RunAsync("deploy do X", "1. build\n2. push", "deploy,x", "deploy");
-        var id = saved.Split('[', ']')[1];
+        string saved = await remember.RunAsync("deploy do X", "1. build\n2. push", "deploy,x", "deploy");
+        string id = saved.Split('[', ']')[1];
 
-        var recovered = await retrieve.RunAsync(query: null, ids: id);
+        string recovered = await retrieve.RunAsync(query: null, ids: id);
 
         Assert.Contains("deploy do X", recovered);
         Assert.Contains("1. build", recovered);

@@ -16,13 +16,13 @@ public sealed class JsonConversationStoreTests : IDisposable
     [Fact]
     public async Task SaveAsync_then_LoadAsync_preserva_mensagens_e_titulo()
     {
-        var store = new JsonConversationStore(_tempDir);
-        var conversation = new Conversation { Title = "Implementar login" };
+        JsonConversationStore store = new JsonConversationStore(_tempDir);
+        Conversation conversation = new Conversation { Title = "Implementar login" };
         conversation.Messages.Add(new ChatMessage(ChatRole.User, "implemente o login"));
         conversation.Messages.Add(new ChatMessage(ChatRole.Assistant, "feito!"));
 
         await store.SaveAsync(conversation);
-        var loaded = await store.LoadAsync(conversation.Id);
+        Conversation? loaded = await store.LoadAsync(conversation.Id);
 
         Assert.NotNull(loaded);
         Assert.Equal("Implementar login", loaded!.Title);
@@ -34,14 +34,14 @@ public sealed class JsonConversationStoreTests : IDisposable
     [Fact]
     public async Task ListAsync_retorna_resumos_ordenados_por_atualizacao()
     {
-        var store = new JsonConversationStore(_tempDir);
+        JsonConversationStore store = new JsonConversationStore(_tempDir);
 
-        var older = new Conversation { Title = "Antiga", UpdatedAt = DateTimeOffset.Now.AddHours(-1) };
-        var newer = new Conversation { Title = "Recente", UpdatedAt = DateTimeOffset.Now };
+        Conversation older = new Conversation { Title = "Antiga", UpdatedAt = DateTimeOffset.Now.AddHours(-1) };
+        Conversation newer = new Conversation { Title = "Recente", UpdatedAt = DateTimeOffset.Now };
         await store.SaveAsync(older);
         await store.SaveAsync(newer);
 
-        var list = await store.ListAsync();
+        IReadOnlyList<ConversationSummary> list = await store.ListAsync();
 
         Assert.Equal(2, list.Count);
         Assert.Equal("Recente", list[0].Title);
@@ -51,8 +51,8 @@ public sealed class JsonConversationStoreTests : IDisposable
     [Fact]
     public async Task LoadAsync_retorna_null_quando_nao_existe()
     {
-        var store = new JsonConversationStore(_tempDir);
-        var loaded = await store.LoadAsync("inexistente");
+        JsonConversationStore store = new JsonConversationStore(_tempDir);
+        Conversation? loaded = await store.LoadAsync("inexistente");
         Assert.Null(loaded);
     }
 

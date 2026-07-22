@@ -33,7 +33,7 @@ public sealed class DetectorSilencio
     /// <summary>Alimenta um novo nível de áudio (0–1). Retorna true quando a gravação deve encerrar.</summary>
     public bool Alimentar(float nivel)
     {
-        var agora = _relogio.Elapsed;
+        TimeSpan agora = _relogio.Elapsed;
 
         if (agora >= DuracaoMaxima)
         {

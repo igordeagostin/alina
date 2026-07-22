@@ -1,3 +1,4 @@
+using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Models;
 using Alina.Core.Tools;
@@ -22,6 +23,7 @@ public sealed class ChatOrchestrator : IOrchestrator
     private readonly IConversationStore _store;
     private readonly IProfileStore _profile;
     private readonly IMemoryRetriever _memory;
+    private readonly IHabilidadeStore _habilidades;
     private readonly ILogger<ChatOrchestrator> _logger;
 
     private Conversation _current = new();
@@ -34,6 +36,7 @@ public sealed class ChatOrchestrator : IOrchestrator
         IConversationStore store,
         IProfileStore profile,
         IMemoryRetriever memory,
+        IHabilidadeStore habilidades,
         ILogger<ChatOrchestrator>? logger = null)
     {
         _client = client;
@@ -41,6 +44,7 @@ public sealed class ChatOrchestrator : IOrchestrator
         _store = store;
         _profile = profile;
         _memory = memory;
+        _habilidades = habilidades;
         _logger = logger ?? NullLogger<ChatOrchestrator>.Instance;
     }
 
@@ -50,7 +54,7 @@ public sealed class ChatOrchestrator : IOrchestrator
 
     public async Task<bool> ResumeAsync(string conversationId, CancellationToken cancellationToken = default)
     {
-        var loaded = await _store.LoadAsync(conversationId, cancellationToken);
+        Conversation? loaded = await _store.LoadAsync(conversationId, cancellationToken);
         if (loaded is null)
         {
             return false;
@@ -69,19 +73,19 @@ public sealed class ChatOrchestrator : IOrchestrator
             _current.Title = userText.Length > 60 ? userText[..60] + "…" : userText;
         }
 
-        var systemPrompt = await GetSystemPromptAsync(userText, cancellationToken);
+        string systemPrompt = await GetSystemPromptAsync(userText, cancellationToken);
 
-        var request = new List<ChatMessage>(_current.Messages.Count + 1)
+        List<ChatMessage> request = new List<ChatMessage>(_current.Messages.Count + 1)
         {
             new(ChatRole.System, systemPrompt),
         };
         request.AddRange(_current.Messages);
 
-        var options = new ChatOptions { Tools = _tools.AsAIFunctions() };
+        ChatOptions options = new ChatOptions { Tools = _tools.AsAIFunctions() };
 
         _logger.LogDebug("Enviando {Count} mensagens ao LLM ({Tools} tools).", request.Count, options.Tools.Count);
 
-        var response = await _client.GetResponseAsync(request, options, cancellationToken);
+        ChatResponse response = await _client.GetResponseAsync(request, options, cancellationToken);
 
         // Inclui mensagens intermediárias (chamadas/resultados de tools) e a resposta final.
         _current.Messages.AddRange(response.Messages);
@@ -99,7 +103,7 @@ public sealed class ChatOrchestrator : IOrchestrator
             return string.Empty;
         }
 
-        var request = new List<ChatMessage>(_current.Messages.Count + 1)
+        List<ChatMessage> request = new List<ChatMessage>(_current.Messages.Count + 1)
         {
             new(ChatRole.System,
                 "Resuma a conversa a seguir em português do Brasil, de forma concisa e objetiva. " +
@@ -109,7 +113,7 @@ public sealed class ChatOrchestrator : IOrchestrator
         request.AddRange(_current.Messages);
 
         // Resumo puro: sem tools, para o modelo não tentar agir durante a síntese.
-        var response = await _client.GetResponseAsync(request, new ChatOptions(), cancellationToken);
+        ChatResponse response = await _client.GetResponseAsync(request, new ChatOptions(), cancellationToken);
         return response.Text.Trim();
     }
 
@@ -124,14 +128,14 @@ public sealed class ChatOrchestrator : IOrchestrator
             _preferencesLoaded = true;
         }
 
-        var index = await _memory.GetIndexAsync(cancellationToken);
-        var pinned = await _memory.GetPinnedAsync(cancellationToken);
-        var relevant = await _memory.SearchAsync(userText, TopKMemories, cancellationToken);
+        IReadOnlyList<MemoryIndexEntry> index = await _memory.GetIndexAsync(cancellationToken);
+        IReadOnlyList<MemoryItem> pinned = await _memory.GetPinnedAsync(cancellationToken);
+        IReadOnlyList<MemoryItem> relevant = await _memory.SearchAsync(userText, TopKMemories, cancellationToken);
 
         // Fixadas primeiro, depois relevantes, sem duplicar.
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var detailed = new List<MemoryItem>(pinned.Count + relevant.Count);
-        foreach (var item in pinned.Concat(relevant))
+        HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        List<MemoryItem> detailed = new List<MemoryItem>(pinned.Count + relevant.Count);
+        foreach (MemoryItem? item in pinned.Concat(relevant))
         {
             if (seen.Add(item.Id))
             {
@@ -139,10 +143,12 @@ public sealed class ChatOrchestrator : IOrchestrator
             }
         }
 
-        _logger.LogDebug(
-            "Memória: {Index} no índice, {Detailed} detalhadas ({Pinned} fixadas + {Relevant} relevantes).",
-            index.Count, detailed.Count, pinned.Count, relevant.Count);
+        IReadOnlyList<HabilidadeResumo> habilidades = await _habilidades.ListarAsync(cancellationToken);
 
-        return SystemPromptBuilder.Build(_tools.Tools, _preferences, index, detailed);
+        _logger.LogDebug(
+            "Memória: {Index} no índice, {Detailed} detalhadas ({Pinned} fixadas + {Relevant} relevantes); {Habilidades} habilidades.",
+            index.Count, detailed.Count, pinned.Count, relevant.Count, habilidades.Count);
+
+        return SystemPromptBuilder.Build(_tools.Tools, _preferences, index, detailed, habilidades);
     }
 }

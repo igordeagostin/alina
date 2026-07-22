@@ -8,8 +8,8 @@ internal static class TextoVoz
 {
     public static string Normalizar(string texto)
     {
-        var sb = new StringBuilder(texto.Length);
-        foreach (var c in texto.Normalize(NormalizationForm.FormD))
+        StringBuilder sb = new StringBuilder(texto.Length);
+        foreach (char c in texto.Normalize(NormalizationForm.FormD))
         {
             if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
             {
@@ -31,7 +31,7 @@ internal static class TextoVoz
 
     public static bool Contem(string frase, string termo)
     {
-        var alvo = Normalizar(termo).Trim();
+        string alvo = Normalizar(termo).Trim();
         return alvo.Length > 0 && frase.Contains(alvo, StringComparison.Ordinal);
     }
 

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace Alina.App.Services;
@@ -16,7 +17,7 @@ public sealed class SeletorPasta
 
         void Abrir()
         {
-            var dialog = new OpenFolderDialog { Title = "Escolher pasta do projeto" };
+            OpenFolderDialog dialog = new OpenFolderDialog { Title = "Escolher pasta do projeto" };
             if (!string.IsNullOrWhiteSpace(diretorioInicial) && Directory.Exists(diretorioInicial))
             {
                 dialog.InitialDirectory = diretorioInicial;
@@ -28,7 +29,7 @@ public sealed class SeletorPasta
             }
         }
 
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        Dispatcher? dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is not null && !dispatcher.CheckAccess())
         {
             dispatcher.Invoke(Abrir);

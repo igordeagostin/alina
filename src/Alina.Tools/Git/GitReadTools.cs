@@ -30,7 +30,7 @@ public sealed class GitStatusTool : GitReadToolBase
         [Description("Caminho do repositório (opcional).")] string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await GitCommandRunner.RunAsync(Options, repositoryPath, cancellationToken, "status", "--short", "--branch");
+        GitCommandResult result = await GitCommandRunner.RunAsync(Options, repositoryPath, cancellationToken, "status", "--short", "--branch");
         return result.ToToolResult();
     }
 }
@@ -53,8 +53,8 @@ public sealed class GitDiffTool : GitReadToolBase
         [Description("Caminho do repositório (opcional).")] string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        var args = staged ? new[] { "diff", "--cached" } : new[] { "diff" };
-        var result = await GitCommandRunner.RunAsync(Options, repositoryPath, cancellationToken, args);
+        string[] args = staged ? new[] { "diff", "--cached" } : new[] { "diff" };
+        GitCommandResult result = await GitCommandRunner.RunAsync(Options, repositoryPath, cancellationToken, args);
         return result.ToToolResult();
     }
 }
@@ -77,8 +77,8 @@ public sealed class GitLogTool : GitReadToolBase
         [Description("Caminho do repositório (opcional).")] string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        var limit = count is > 0 and <= 200 ? count : 15;
-        var result = await GitCommandRunner.RunAsync(
+        int limit = count is > 0 and <= 200 ? count : 15;
+        GitCommandResult result = await GitCommandRunner.RunAsync(
             Options, repositoryPath, cancellationToken,
             "log", $"-{limit}", "--pretty=format:%h %ad %an: %s", "--date=short");
         return result.ToToolResult();

@@ -20,14 +20,16 @@ public sealed class StorageOptions
             return DataDirectory!;
         }
 
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var baseDir = string.IsNullOrWhiteSpace(appData)
+        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string baseDir = string.IsNullOrWhiteSpace(appData)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".alina")
             : Path.Combine(appData, "Alina");
         return baseDir;
     }
 
     public string ResolveConversationsDirectory() => Path.Combine(ResolveDataDirectory(), "conversations");
+
+    public string ResolveHabilidadesDirectory() => Path.Combine(ResolveDataDirectory(), "habilidades");
 
     public string ResolvePreferencesFile() =>
         string.IsNullOrWhiteSpace(PreferencesFile)

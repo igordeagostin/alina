@@ -48,7 +48,7 @@ public sealed class MemoryItem
             return Title!.Trim();
         }
 
-        var content = Content.Trim();
+        string content = Content.Trim();
         return content.Length > 80 ? content[..80] + "…" : content;
     }
 }

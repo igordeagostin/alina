@@ -12,7 +12,7 @@ internal static class GitCommandRunner
         CancellationToken cancellationToken,
         params string[] arguments)
     {
-        var directory = string.IsNullOrWhiteSpace(workingDirectory)
+        string directory = string.IsNullOrWhiteSpace(workingDirectory)
             ? (string.IsNullOrWhiteSpace(options.DefaultRepository) ? Environment.CurrentDirectory : options.DefaultRepository!)
             : workingDirectory;
 
@@ -21,7 +21,7 @@ internal static class GitCommandRunner
             return new GitCommandResult(-1, $"Erro: diretório do repositório não encontrado: {directory}");
         }
 
-        var psi = new ProcessStartInfo
+        ProcessStartInfo psi = new ProcessStartInfo
         {
             FileName = options.Executable,
             RedirectStandardOutput = true,
@@ -31,15 +31,15 @@ internal static class GitCommandRunner
             WorkingDirectory = directory,
         };
 
-        foreach (var arg in arguments)
+        foreach (string arg in arguments)
         {
             psi.ArgumentList.Add(arg);
         }
 
         try
         {
-            using var process = new Process { StartInfo = psi };
-            var output = new StringBuilder();
+            using Process process = new Process { StartInfo = psi };
+            StringBuilder output = new StringBuilder();
 
             process.OutputDataReceived += (_, e) => { if (e.Data is not null) output.AppendLine(e.Data); };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) output.AppendLine(e.Data); };
@@ -48,7 +48,7 @@ internal static class GitCommandRunner
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
 
             try
@@ -61,7 +61,7 @@ internal static class GitCommandRunner
                 return new GitCommandResult(-1, $"Erro: comando git excedeu {options.TimeoutSeconds}s.");
             }
 
-            var text = Truncate(output.ToString().TrimEnd(), options.MaxOutputChars);
+            string text = Truncate(output.ToString().TrimEnd(), options.MaxOutputChars);
             return new GitCommandResult(process.ExitCode, text);
         }
         catch (Exception ex)

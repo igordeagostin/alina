@@ -29,8 +29,8 @@ public sealed class AvaliadorPermissaoTests
     [Fact]
     public void Ferramenta_somente_leitura_e_liberada()
     {
-        var o = new PoliticaPermissaoOptions();
-        var pedido = new PedidoPermissao { Ferramenta = "Read", Caminho = Sob("a.cs"), Descricao = "ler" };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions();
+        PedidoPermissao pedido = new PedidoPermissao { Ferramenta = "Read", Caminho = Sob("a.cs"), Descricao = "ler" };
         Assert.Equal(DecisaoPermissao.Permitir, Avaliar(pedido, o));
     }
 
@@ -45,51 +45,51 @@ public sealed class AvaliadorPermissaoTests
     [Fact]
     public void Diretorio_confiavel_libera_edicao_dentro_dele()
     {
-        var o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [Raiz] };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [Raiz] };
         Assert.Equal(DecisaoPermissao.Permitir, Avaliar(Editar(Sob("src", "x.cs")), o));
     }
 
     [Fact]
     public void Fora_do_workspace_pergunta_quando_ha_dir_confiavel()
     {
-        var o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [Raiz] };
-        var fora = OperatingSystem.IsWindows() ? @"C:\outro\y.cs" : "/outro/y.cs";
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [Raiz] };
+        string fora = OperatingSystem.IsWindows() ? @"C:\outro\y.cs" : "/outro/y.cs";
         Assert.Equal(DecisaoPermissao.Perguntar, Avaliar(Editar(fora), o));
     }
 
     [Fact]
     public void Caminho_protegido_pergunta_mesmo_em_dir_confiavel()
     {
-        var o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [Raiz] };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [Raiz] };
         Assert.Equal(DecisaoPermissao.Perguntar, Avaliar(Editar(Sob(".env")), o));
     }
 
     [Fact]
     public void Regra_aprendida_allow_libera()
     {
-        var o = new PoliticaPermissaoOptions();
-        var regra = new RegraPermissao { Ferramenta = "Bash", PrefixoComando = "npm install", Permitir = true };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions();
+        RegraPermissao regra = new RegraPermissao { Ferramenta = "Bash", PrefixoComando = "npm install", Permitir = true };
         Assert.Equal(DecisaoPermissao.Permitir, Avaliar(Bash("npm install left-pad"), o, regra));
     }
 
     [Fact]
     public void Regra_deny_vence_regra_allow()
     {
-        var o = new PoliticaPermissaoOptions();
-        var allow = new RegraPermissao { Ferramenta = "*", Permitir = true };
-        var deny = new RegraPermissao { Ferramenta = "Bash", PrefixoComando = "npm", Permitir = false };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions();
+        RegraPermissao allow = new RegraPermissao { Ferramenta = "*", Permitir = true };
+        RegraPermissao deny = new RegraPermissao { Ferramenta = "Bash", PrefixoComando = "npm", Permitir = false };
         Assert.Equal(DecisaoPermissao.Negar, Avaliar(Bash("npm publish"), o, allow, deny));
     }
 
     [Fact]
     public void Regra_no_diretorio_so_casa_dentro_dele()
     {
-        var o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [] };
-        var regra = new RegraPermissao { Ferramenta = "Edit", Diretorio = Raiz, Permitir = true };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [] };
+        RegraPermissao regra = new RegraPermissao { Ferramenta = "Edit", Diretorio = Raiz, Permitir = true };
 
         Assert.Equal(DecisaoPermissao.Permitir, Avaliar(Editar(Sob("a.cs"), Sob()), o, regra));
 
-        var fora = OperatingSystem.IsWindows() ? @"C:\outro" : "/outro";
+        string fora = OperatingSystem.IsWindows() ? @"C:\outro" : "/outro";
         Assert.Equal(DecisaoPermissao.Perguntar,
             Avaliar(Editar(Path.Combine(fora, "a.cs"), fora), o, regra));
     }
@@ -97,14 +97,14 @@ public sealed class AvaliadorPermissaoTests
     [Fact]
     public void Modo_autonomia_libera_o_que_sobra()
     {
-        var o = new PoliticaPermissaoOptions { ModoPadrao = ModoPermissao.Autonomia };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions { ModoPadrao = ModoPermissao.Autonomia };
         Assert.Equal(DecisaoPermissao.Permitir, Avaliar(Bash("dotnet publish"), o));
     }
 
     [Fact]
     public void Modo_aceitar_edicoes_libera_arquivo_mas_pergunta_comando()
     {
-        var o = new PoliticaPermissaoOptions { ModoPadrao = ModoPermissao.AceitarEdicoes };
+        PoliticaPermissaoOptions o = new PoliticaPermissaoOptions { ModoPadrao = ModoPermissao.AceitarEdicoes };
         Assert.Equal(DecisaoPermissao.Permitir, Avaliar(Editar(Sob("a.cs")), o));
         Assert.Equal(DecisaoPermissao.Perguntar, Avaliar(Bash("dotnet publish"), o));
     }

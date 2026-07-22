@@ -30,7 +30,7 @@ public sealed class PluginLoaderTests : IDisposable
             }
             """);
 
-        var result = PluginLoader.Load(_dir, new FakeConfirmationService(true));
+        PluginLoadResult result = PluginLoader.Load(_dir, new FakeConfirmationService(true));
 
         Assert.Single(result.Tools);
         Assert.Empty(result.Warnings);
@@ -44,7 +44,7 @@ public sealed class PluginLoaderTests : IDisposable
         WritePlugin("quebrado.plugin.json", "{ isso nao e json valido ");
         WritePlugin("sem_comando.plugin.json", """{ "name": "x", "description": "y" }""");
 
-        var result = PluginLoader.Load(_dir, new FakeConfirmationService(true));
+        PluginLoadResult result = PluginLoader.Load(_dir, new FakeConfirmationService(true));
 
         Assert.Empty(result.Tools);
         Assert.Equal(2, result.Warnings.Count);
@@ -53,11 +53,11 @@ public sealed class PluginLoaderTests : IDisposable
     [Fact]
     public void Nomes_duplicados_geram_warning()
     {
-        var body = """{ "name": "dup", "description": "d", "command": "echo" }""";
+        string body = """{ "name": "dup", "description": "d", "command": "echo" }""";
         WritePlugin("a.plugin.json", body);
         WritePlugin("b.plugin.json", body);
 
-        var result = PluginLoader.Load(_dir, new FakeConfirmationService(true));
+        PluginLoadResult result = PluginLoader.Load(_dir, new FakeConfirmationService(true));
 
         Assert.Single(result.Tools);
         Assert.Contains(result.Warnings, w => w.Contains("duplicado"));
@@ -66,7 +66,7 @@ public sealed class PluginLoaderTests : IDisposable
     [Fact]
     public void Diretorio_inexistente_retorna_vazio()
     {
-        var result = PluginLoader.Load(Path.Combine(_dir, "nao-existe"), new FakeConfirmationService(true));
+        PluginLoadResult result = PluginLoader.Load(Path.Combine(_dir, "nao-existe"), new FakeConfirmationService(true));
         Assert.Empty(result.Tools);
         Assert.Empty(result.Warnings);
     }
@@ -100,8 +100,8 @@ public sealed class ManifestFunctionTests
     [Fact]
     public void Schema_dinamico_reflete_parametros()
     {
-        var tool = new PluginTool(SampleManifest(), new FakeConfirmationService(true));
-        var schema = tool.AsAIFunction().JsonSchema;
+        PluginTool tool = new PluginTool(SampleManifest(), new FakeConfirmationService(true));
+        JsonElement schema = tool.AsAIFunction().JsonSchema;
 
         Assert.Equal(JsonValueKind.Object, schema.ValueKind);
         Assert.True(schema.GetProperty("properties").TryGetProperty("mensagem", out _));
@@ -111,11 +111,11 @@ public sealed class ManifestFunctionTests
     [Fact]
     public async Task Confirmacao_negada_nao_executa()
     {
-        var confirmation = new FakeConfirmationService(result: false);
-        var function = new PluginTool(SampleManifest(), confirmation).AsAIFunction();
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: false);
+        AIFunction function = new PluginTool(SampleManifest(), confirmation).AsAIFunction();
 
-        var args = new AIFunctionArguments { ["mensagem"] = "alina-plugin-ok" };
-        var result = await function.InvokeAsync(args);
+        AIFunctionArguments args = new AIFunctionArguments { ["mensagem"] = "alina-plugin-ok" };
+        object? result = await function.InvokeAsync(args);
 
         Assert.Equal(1, confirmation.Calls);
         Assert.Contains("cancelada", result?.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -124,11 +124,11 @@ public sealed class ManifestFunctionTests
     [Fact]
     public async Task Confirmacao_aprovada_executa_e_substitui_placeholder()
     {
-        var confirmation = new FakeConfirmationService(result: true);
-        var function = new PluginTool(SampleManifest(), confirmation).AsAIFunction();
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: true);
+        AIFunction function = new PluginTool(SampleManifest(), confirmation).AsAIFunction();
 
-        var args = new AIFunctionArguments { ["mensagem"] = "alina-plugin-ok" };
-        var result = await function.InvokeAsync(args);
+        AIFunctionArguments args = new AIFunctionArguments { ["mensagem"] = "alina-plugin-ok" };
+        object? result = await function.InvokeAsync(args);
 
         Assert.Equal(1, confirmation.Calls);
         Assert.Contains("alina-plugin-ok", result?.ToString());
@@ -137,9 +137,9 @@ public sealed class ManifestFunctionTests
     [Fact]
     public async Task Parametro_obrigatorio_ausente_retorna_erro()
     {
-        var function = new PluginTool(SampleManifest(), new FakeConfirmationService(true)).AsAIFunction();
+        AIFunction function = new PluginTool(SampleManifest(), new FakeConfirmationService(true)).AsAIFunction();
 
-        var result = await function.InvokeAsync(new AIFunctionArguments());
+        object? result = await function.InvokeAsync(new AIFunctionArguments());
 
         Assert.Contains("obrigatório", result?.ToString(), StringComparison.OrdinalIgnoreCase);
     }

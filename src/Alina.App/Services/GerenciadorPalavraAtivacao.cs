@@ -1,3 +1,4 @@
+using System.Windows.Threading;
 using Alina.Core.Orchestration;
 using Alina.Voice;
 
@@ -66,7 +67,7 @@ public sealed class GerenciadorPalavraAtivacao : IDisposable
 
     private void AoDetectar()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        Dispatcher? dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is null)
         {
             return;

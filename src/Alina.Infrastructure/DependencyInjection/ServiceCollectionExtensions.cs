@@ -1,8 +1,10 @@
+using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Orchestration;
 using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
+using Alina.Infrastructure.Habilidades;
 using Alina.Infrastructure.Llm;
 using Alina.Infrastructure.Memory;
 using Alina.Infrastructure.Permissoes;
@@ -34,6 +36,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMemoryStore>(sp =>
             new JsonMemoryStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
 
+        // Habilidades: cada uma um arquivo Markdown numa pasta dedicada (índice no
+        // system prompt, conteúdo completo sob demanda).
+        services.AddSingleton<IHabilidadeStore>(sp =>
+            new FileHabilidadeStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
+
         // Política de permissões: decide o que liberar/perguntar antes de interromper o usuário.
         services.AddSingleton<IPoliticaPermissao>(sp =>
             new PoliticaPermissao(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
@@ -43,8 +50,8 @@ public static class ServiceCollectionExtensions
         // embeddings é opcional: sem chave/desabilitado, o retriever cai para keyword.
         services.AddSingleton<IMemoryRetriever>(sp =>
         {
-            var options = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-            var generator = LlmClientFactory.CreateEmbeddingGenerator(options);
+            LlmOptions options = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
+            IEmbeddingGenerator<string, Embedding<float>>? generator = LlmClientFactory.CreateEmbeddingGenerator(options);
             return new MemoryRetriever(sp.GetRequiredService<IMemoryStore>(), generator, options.EmbeddingModel);
         });
 
@@ -59,8 +66,8 @@ public static class ServiceCollectionExtensions
         // LLM
         services.AddSingleton<IChatClient>(sp =>
         {
-            var options = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-            var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+            LlmOptions options = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
+            ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             return LlmClientFactory.Create(options, loggerFactory);
         });
 

@@ -33,7 +33,7 @@ public sealed class GitToolsTests : IDisposable
         await InitRepoAsync();
         WriteFile("a.txt", "conteudo");
 
-        var status = await new GitStatusTool(new FakeConfirmationService(true), _options).RunAsync(_repo);
+        string status = await new GitStatusTool(new FakeConfirmationService(true), _options).RunAsync(_repo);
 
         Assert.Contains("a.txt", status);
     }
@@ -44,13 +44,13 @@ public sealed class GitToolsTests : IDisposable
         await InitRepoAsync();
         WriteFile("a.txt", "conteudo");
 
-        var confirmation = new FakeConfirmationService(result: false);
-        var commit = await new GitCommitTool(confirmation, _options).RunAsync("nao deve acontecer", repositoryPath: _repo);
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: false);
+        string commit = await new GitCommitTool(confirmation, _options).RunAsync("nao deve acontecer", repositoryPath: _repo);
 
         Assert.Equal(1, confirmation.Calls);
         Assert.Contains("cancelada", commit, StringComparison.OrdinalIgnoreCase);
 
-        var log = await new GitLogTool(new FakeConfirmationService(true), _options).RunAsync(repositoryPath: _repo);
+        string log = await new GitLogTool(new FakeConfirmationService(true), _options).RunAsync(repositoryPath: _repo);
         Assert.DoesNotContain("nao deve acontecer", log);
     }
 
@@ -60,11 +60,11 @@ public sealed class GitToolsTests : IDisposable
         await InitRepoAsync();
         WriteFile("a.txt", "conteudo");
 
-        var commit = await new GitCommitTool(new FakeConfirmationService(true), _options)
+        string commit = await new GitCommitTool(new FakeConfirmationService(true), _options)
             .RunAsync("primeiro commit da alina", repositoryPath: _repo);
         Assert.DoesNotContain("git falhou", commit);
 
-        var log = await new GitLogTool(new FakeConfirmationService(true), _options).RunAsync(repositoryPath: _repo);
+        string log = await new GitLogTool(new FakeConfirmationService(true), _options).RunAsync(repositoryPath: _repo);
         Assert.Contains("primeiro commit da alina", log);
     }
 
@@ -75,18 +75,18 @@ public sealed class GitToolsTests : IDisposable
         WriteFile("a.txt", "conteudo");
         await new GitCommitTool(new FakeConfirmationService(true), _options).RunAsync("base", repositoryPath: _repo);
 
-        var branch = await new GitBranchTool(new FakeConfirmationService(true), _options)
+        string branch = await new GitBranchTool(new FakeConfirmationService(true), _options)
             .RunAsync("feature/login", create: true, repositoryPath: _repo);
         Assert.DoesNotContain("git falhou", branch);
 
-        var status = await new GitStatusTool(new FakeConfirmationService(true), _options).RunAsync(_repo);
+        string status = await new GitStatusTool(new FakeConfirmationService(true), _options).RunAsync(_repo);
         Assert.Contains("feature/login", status);
     }
 
     [Fact]
     public void GitCommit_exige_confirmacao_status_nao()
     {
-        var confirmation = new FakeConfirmationService(true);
+        FakeConfirmationService confirmation = new FakeConfirmationService(true);
         Assert.True(new GitCommitTool(confirmation, _options).RequiresConfirmation);
         Assert.False(new GitStatusTool(confirmation, _options).RequiresConfirmation);
     }
@@ -98,7 +98,7 @@ public sealed class GitToolsTests : IDisposable
             if (Directory.Exists(_repo))
             {
                 // Remove atributo read-only de arquivos do .git antes de apagar.
-                foreach (var file in Directory.EnumerateFiles(_repo, "*", SearchOption.AllDirectories))
+                foreach (string file in Directory.EnumerateFiles(_repo, "*", SearchOption.AllDirectories))
                 {
                     File.SetAttributes(file, FileAttributes.Normal);
                 }

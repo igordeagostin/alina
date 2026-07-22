@@ -12,11 +12,11 @@ public sealed class NAudioPlayer : IAudioPlayer
             return;
         }
 
-        using var stream = new MemoryStream(mp3Audio);
-        using var reader = new Mp3FileReader(stream);
-        using var output = new WaveOutEvent();
+        using MemoryStream stream = new MemoryStream(mp3Audio);
+        using Mp3FileReader reader = new Mp3FileReader(stream);
+        using WaveOutEvent output = new WaveOutEvent();
 
-        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         output.PlaybackStopped += (_, _) => finished.TrySetResult();
 
         output.Init(reader);

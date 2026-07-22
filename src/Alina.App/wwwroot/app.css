@@ -867,6 +867,42 @@ html, body {
     border-color: var(--accent);
 }
 
+.cfg-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    outline: none;
+    resize: vertical;
+    min-height: 160px;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.cfg-textarea:focus {
+    border-color: var(--accent);
+}
+
+.config__item--acoes {
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.hab__nome {
+    display: block;
+    color: var(--text);
+    font-size: 12px;
+}
+
+.hab__descricao {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+}
+
 .config__ajuda-caminho {
     display: block;
     word-break: break-all;

@@ -39,7 +39,7 @@ public static class LlmClientFactory
 
     private static IChatClient CreateAnthropic(LlmOptions options)
     {
-        var client = string.IsNullOrWhiteSpace(options.Endpoint)
+        AnthropicClient client = string.IsNullOrWhiteSpace(options.Endpoint)
             ? new AnthropicClient { ApiKey = options.ApiKey! }
             : new AnthropicClient { ApiKey = options.ApiKey!, BaseUrl = options.Endpoint! };
 
@@ -68,7 +68,7 @@ public static class LlmClientFactory
 
     private static OpenAIClient CreateOpenAIClient(LlmOptions options)
     {
-        var credential = new ApiKeyCredential(options.ApiKey!);
+        ApiKeyCredential credential = new ApiKeyCredential(options.ApiKey!);
 
         return string.IsNullOrWhiteSpace(options.Endpoint)
             ? new OpenAIClient(credential)

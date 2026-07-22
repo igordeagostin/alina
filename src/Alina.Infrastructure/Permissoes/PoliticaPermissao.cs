@@ -26,7 +26,7 @@ public sealed class PoliticaPermissao : IPoliticaPermissao
     public PoliticaPermissao(string arquivo)
     {
         _arquivo = arquivo;
-        var dir = Path.GetDirectoryName(_arquivo);
+        string? dir = Path.GetDirectoryName(_arquivo);
         if (!string.IsNullOrWhiteSpace(dir))
         {
             Directory.CreateDirectory(dir);
@@ -52,7 +52,7 @@ public sealed class PoliticaPermissao : IPoliticaPermissao
     {
         lock (_gate)
         {
-            var todas = _estado.Regras.Concat(_regrasSessao).ToList();
+            List<RegraPermissao> todas = _estado.Regras.Concat(_regrasSessao).ToList();
             return AvaliadorPermissao.Avaliar(pedido, _estado.Opcoes, todas);
         }
     }
@@ -64,7 +64,7 @@ public sealed class PoliticaPermissao : IPoliticaPermissao
             return;
         }
 
-        var regra = CriarRegra(pedido, resposta);
+        RegraPermissao regra = CriarRegra(pedido, resposta);
 
         lock (_gate)
         {
@@ -92,7 +92,7 @@ public sealed class PoliticaPermissao : IPoliticaPermissao
     {
         lock (_gate)
         {
-            var removeu = _estado.Regras.RemoveAll(r => r.Id == id) > 0;
+            bool removeu = _estado.Regras.RemoveAll(r => r.Id == id) > 0;
             if (removeu)
             {
                 Salvar();
@@ -102,8 +102,8 @@ public sealed class PoliticaPermissao : IPoliticaPermissao
 
     private static RegraPermissao CriarRegra(PedidoPermissao pedido, RespostaConfirmacaoPermissao resposta)
     {
-        var prefixoComando = string.IsNullOrWhiteSpace(pedido.Comando) ? null : ExtrairPrefixoComando(pedido.Comando);
-        var diretorio = resposta.Escopo == EscopoPermissao.SempreNesteDiretorio
+        string? prefixoComando = string.IsNullOrWhiteSpace(pedido.Comando) ? null : ExtrairPrefixoComando(pedido.Comando);
+        string? diretorio = resposta.Escopo == EscopoPermissao.SempreNesteDiretorio
             ? pedido.DiretorioTrabalho
             : null;
 
@@ -119,13 +119,13 @@ public sealed class PoliticaPermissao : IPoliticaPermissao
 
     private static string ExtrairPrefixoComando(string comando)
     {
-        var tokens = comando.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string[] tokens = comando.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return tokens.Length <= 2 ? string.Join(' ', tokens) : $"{tokens[0]} {tokens[1]}";
     }
 
     private static string MontarRotulo(PedidoPermissao pedido, string? prefixoComando, string? diretorio)
     {
-        var alvo = prefixoComando is not null ? $"{prefixoComando}*" : pedido.Ferramenta;
+        string alvo = prefixoComando is not null ? $"{prefixoComando}*" : pedido.Ferramenta;
         return diretorio is not null ? $"{alvo} em {diretorio}" : alvo;
     }
 
@@ -135,7 +135,7 @@ public sealed class PoliticaPermissao : IPoliticaPermissao
         {
             if (File.Exists(_arquivo))
             {
-                var json = File.ReadAllText(_arquivo);
+                string json = File.ReadAllText(_arquivo);
                 _estado = JsonSerializer.Deserialize<Estado>(json, JsonOptions) ?? new Estado();
             }
         }

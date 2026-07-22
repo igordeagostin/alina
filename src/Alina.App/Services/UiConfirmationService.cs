@@ -15,14 +15,14 @@ public sealed class UiConfirmationService : IConfirmationService
 
     public async Task<bool> ConfirmAsync(string action, string? details = null, CancellationToken cancellationToken = default)
     {
-        var handler = Requested;
+        Func<ConfirmationRequest, Task>? handler = Requested;
         if (handler is null)
         {
             return false;
         }
 
-        var request = new ConfirmationRequest(action, details);
-        await using var _ = cancellationToken.Register(() => request.Responder(false));
+        ConfirmationRequest request = new ConfirmationRequest(action, details);
+        await using CancellationTokenRegistration _ = cancellationToken.Register(() => request.Responder(false));
 
         await handler(request);
         return await request.Resposta;

@@ -37,13 +37,13 @@ public sealed class FileReadTool : ToolBase
             return $"Erro: arquivo não encontrado: {path}";
         }
 
-        var info = new FileInfo(path);
+        FileInfo info = new FileInfo(path);
         if (info.Length > MaxBytes)
         {
             return $"Erro: arquivo muito grande ({info.Length} bytes, limite {MaxBytes}). Leia um trecho menor.";
         }
 
-        var content = await File.ReadAllTextAsync(path, cancellationToken);
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
         return content;
     }
 }

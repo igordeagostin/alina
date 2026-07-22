@@ -27,7 +27,7 @@ public sealed class MemoryRetriever : IMemoryRetriever
 
     public async Task<IReadOnlyList<MemoryIndexEntry>> GetIndexAsync(CancellationToken cancellationToken = default)
     {
-        var items = await _store.GetAllAsync(cancellationToken);
+        IReadOnlyList<MemoryItem> items = await _store.GetAllAsync(cancellationToken);
         return items
             .Select(i => new MemoryIndexEntry(i.Id, i.Kind, i.Category, i.DisplayTitle()))
             .ToList();
@@ -35,14 +35,14 @@ public sealed class MemoryRetriever : IMemoryRetriever
 
     public async Task<IReadOnlyList<MemoryItem>> GetPinnedAsync(CancellationToken cancellationToken = default)
     {
-        var items = await _store.GetAllAsync(cancellationToken);
+        IReadOnlyList<MemoryItem> items = await _store.GetAllAsync(cancellationToken);
         return items.Where(i => i.Pinned).ToList();
     }
 
     public async Task<IReadOnlyList<MemoryItem>> GetByIdsAsync(IEnumerable<string> ids, CancellationToken cancellationToken = default)
     {
-        var wanted = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
-        var items = await _store.GetAllAsync(cancellationToken);
+        HashSet<string> wanted = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
+        IReadOnlyList<MemoryItem> items = await _store.GetAllAsync(cancellationToken);
         return items.Where(i => wanted.Contains(i.Id)).ToList();
     }
 
@@ -53,21 +53,21 @@ public sealed class MemoryRetriever : IMemoryRetriever
             return Array.Empty<MemoryItem>();
         }
 
-        var items = await _store.GetAllAsync(cancellationToken);
+        IReadOnlyList<MemoryItem> items = await _store.GetAllAsync(cancellationToken);
         // Itens fixados já entram sempre; não gaste ranqueamento com eles.
-        var candidates = items.Where(i => !i.Pinned).ToList();
+        List<MemoryItem> candidates = items.Where(i => !i.Pinned).ToList();
         if (candidates.Count == 0)
         {
             return Array.Empty<MemoryItem>();
         }
 
-        var queryVector = await TryEmbedAsync(query, cancellationToken);
+        float[]? queryVector = await TryEmbedAsync(query, cancellationToken);
         if (queryVector is not null)
         {
-            var scored = new List<(MemoryItem Item, float Score)>(candidates.Count);
-            foreach (var item in candidates)
+            List<(MemoryItem Item, float Score)> scored = new List<(MemoryItem Item, float Score)>(candidates.Count);
+            foreach (MemoryItem? item in candidates)
             {
-                var vector = await EnsureEmbeddingAsync(item, cancellationToken);
+                float[]? vector = await EnsureEmbeddingAsync(item, cancellationToken);
                 if (vector is not null)
                 {
                     scored.Add((item, Cosine(queryVector, vector)));
@@ -91,8 +91,8 @@ public sealed class MemoryRetriever : IMemoryRetriever
             return item.Embedding;
         }
 
-        var text = EmbeddingText(item);
-        var vector = await TryEmbedAsync(text, cancellationToken);
+        string text = EmbeddingText(item);
+        float[]? vector = await TryEmbedAsync(text, cancellationToken);
         if (vector is null)
         {
             return null;
@@ -113,7 +113,7 @@ public sealed class MemoryRetriever : IMemoryRetriever
 
         try
         {
-            var embeddings = await _embeddings.GenerateAsync(new[] { text }, cancellationToken: cancellationToken);
+            GeneratedEmbeddings<Embedding<float>> embeddings = await _embeddings.GenerateAsync(new[] { text }, cancellationToken: cancellationToken);
             return embeddings.Count > 0 ? embeddings[0].Vector.ToArray() : null;
         }
         catch
@@ -125,24 +125,24 @@ public sealed class MemoryRetriever : IMemoryRetriever
 
     private static string EmbeddingText(MemoryItem item)
     {
-        var keywords = item.Keywords.Count > 0 ? " " + string.Join(" ", item.Keywords) : string.Empty;
-        var title = string.IsNullOrWhiteSpace(item.Title) ? string.Empty : item.Title + ". ";
+        string keywords = item.Keywords.Count > 0 ? " " + string.Join(" ", item.Keywords) : string.Empty;
+        string title = string.IsNullOrWhiteSpace(item.Title) ? string.Empty : item.Title + ". ";
         return (title + item.Content + keywords).Trim();
     }
 
     private static IReadOnlyList<MemoryItem> RankByKeywords(IReadOnlyList<MemoryItem> candidates, string query, int topK)
     {
-        var queryTokens = Tokenize(query);
+        HashSet<string> queryTokens = Tokenize(query);
         if (queryTokens.Count == 0)
         {
             return Array.Empty<MemoryItem>();
         }
 
-        var scored = new List<(MemoryItem Item, int Score)>(candidates.Count);
-        foreach (var item in candidates)
+        List<(MemoryItem Item, int Score)> scored = new List<(MemoryItem Item, int Score)>(candidates.Count);
+        foreach (MemoryItem item in candidates)
         {
-            var haystack = Tokenize($"{item.Title} {item.Content} {item.Category} {string.Join(' ', item.Keywords)}");
-            var score = queryTokens.Count(haystack.Contains);
+            HashSet<string> haystack = Tokenize($"{item.Title} {item.Content} {item.Category} {string.Join(' ', item.Keywords)}");
+            int score = queryTokens.Count(haystack.Contains);
             if (score > 0)
             {
                 scored.Add((item, score));
@@ -154,13 +154,13 @@ public sealed class MemoryRetriever : IMemoryRetriever
 
     private static HashSet<string> Tokenize(string text)
     {
-        var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(text))
         {
             return tokens;
         }
 
-        foreach (var raw in text.Split(
+        foreach (string raw in text.Split(
             new[] { ' ', '\t', '\n', '\r', '.', ',', ';', ':', '!', '?', '(', ')', '[', ']', '{', '}', '/', '\\', '"', '\'', '-' },
             StringSplitOptions.RemoveEmptyEntries))
         {
@@ -175,9 +175,9 @@ public sealed class MemoryRetriever : IMemoryRetriever
 
     private static float Cosine(float[] a, float[] b)
     {
-        var length = Math.Min(a.Length, b.Length);
+        int length = Math.Min(a.Length, b.Length);
         double dot = 0, na = 0, nb = 0;
-        for (var i = 0; i < length; i++)
+        for (int i = 0; i < length; i++)
         {
             dot += a[i] * b[i];
             na += a[i] * a[i];

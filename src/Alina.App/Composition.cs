@@ -10,6 +10,7 @@ using Alina.Tools;
 using Alina.Tools.Background;
 using Alina.Tools.ClaudeCode;
 using Alina.Tools.Git;
+using Alina.Tools.Habilidades;
 using Alina.Tools.Memory;
 using Alina.Tools.Plugins;
 using Alina.Voice;
@@ -34,7 +35,7 @@ public static class Composition
 {
     public static IHost BuildHost()
     {
-        var builder = Host.CreateApplicationBuilder();
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
         builder.Configuration.AddUserSecrets(typeof(Composition).Assembly, optional: true);
 
@@ -67,7 +68,7 @@ public static class Composition
 #endif
 
         // Confirmação como overlay dentro da janela (substitui o ConsoleConfirmationService)
-        var confirmation = new UiConfirmationService();
+        UiConfirmationService confirmation = new UiConfirmationService();
         builder.Services.AddSingleton(confirmation);
         builder.Services.AddSingleton<IConfirmationService>(confirmation);
 
@@ -108,8 +109,11 @@ public static class Composition
                 sp.GetRequiredService<IContextoPermissao>()));
 
         // Claude Code (Fase 3)
-        var claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();
+        ClaudeCodeOptions claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();
         builder.Services.AddSingleton(claudeCodeOptions);
+        builder.Services.AddSingleton(sp => new ConfiguracoesClaudeCodeService(
+            sp.GetRequiredService<IOptions<StorageOptions>>().Value,
+            sp.GetRequiredService<ClaudeCodeOptions>()));
         builder.Services.AddSingleton<ClaudeCodeTool>();
         builder.Services.AddSingleton<ITool>(sp => sp.GetRequiredService<ClaudeCodeTool>());
 
@@ -119,7 +123,7 @@ public static class Composition
         builder.Services.AddSingleton<ITool, ListTasksTool>();
 
         // Tools de Git (Fase 5)
-        var gitOptions = builder.Configuration.GetSection(GitOptions.SectionName).Get<GitOptions>() ?? new GitOptions();
+        GitOptions gitOptions = builder.Configuration.GetSection(GitOptions.SectionName).Get<GitOptions>() ?? new GitOptions();
         builder.Services.AddSingleton(gitOptions);
         builder.Services.AddSingleton<ITool, GitStatusTool>();
         builder.Services.AddSingleton<ITool, GitDiffTool>();
@@ -132,8 +136,13 @@ public static class Composition
         builder.Services.AddSingleton<ITool, RecallTool>();
         builder.Services.AddSingleton<ITool, ForgetTool>();
 
+        // Habilidades
+        builder.Services.AddSingleton<ITool, AprenderHabilidadeTool>();
+        builder.Services.AddSingleton<ITool, UsarHabilidadeTool>();
+        builder.Services.AddSingleton<ITool, EsquecerHabilidadeTool>();
+
         // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
-        var voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();
+        VoiceOptions voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();
         if (string.IsNullOrWhiteSpace(voiceOptions.CaminhoModeloVosk))
         {
             voiceOptions.CaminhoModeloVosk = Path.Combine(AppContext.BaseDirectory, "Modelos", "vosk-model-small-pt-0.3");
@@ -144,8 +153,8 @@ public static class Composition
         builder.Services.AddSingleton<IAudioPlayer, NAudioPlayer>();
         builder.Services.AddSingleton(sp =>
         {
-            var llm = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-            var key = string.IsNullOrWhiteSpace(voiceOptions.ApiKey) ? llm.ApiKey : voiceOptions.ApiKey;
+            LlmOptions llm = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
+            string? key = string.IsNullOrWhiteSpace(voiceOptions.ApiKey) ? llm.ApiKey : voiceOptions.ApiKey;
             if (string.IsNullOrWhiteSpace(key))
             {
                 throw new InvalidOperationException("Chave da OpenAI não configurada para voz (Voice:ApiKey ou Llm:ApiKey).");
@@ -157,14 +166,14 @@ public static class Composition
         builder.Services.AddSingleton<ITextToSpeech, OpenAITextToSpeech>();
 
         // Plugins declarativos (Fase 6)
-        var pluginsDir = builder.Configuration.GetValue<string>("Plugins:Directory");
+        string? pluginsDir = builder.Configuration.GetValue<string>("Plugins:Directory");
         if (string.IsNullOrWhiteSpace(pluginsDir))
         {
             pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
         }
 
-        var pluginResult = PluginLoader.Load(pluginsDir, confirmation);
-        foreach (var pluginTool in pluginResult.Tools)
+        PluginLoadResult pluginResult = PluginLoader.Load(pluginsDir, confirmation);
+        foreach (PluginTool pluginTool in pluginResult.Tools)
         {
             builder.Services.AddSingleton<ITool>(pluginTool);
         }

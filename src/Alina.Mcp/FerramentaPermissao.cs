@@ -24,9 +24,9 @@ internal sealed class FerramentaPermissao
         [Description("Entrada (argumentos) da ferramenta.")] JsonElement input,
         CancellationToken cancellationToken)
     {
-        var pedido = MapeadorPedidoPermissao.Mapear(tool_name, input, contexto.DiretorioAtual);
+        PedidoPermissao pedido = MapeadorPedidoPermissao.Mapear(tool_name, input, contexto.DiretorioAtual);
 
-        var decisao = politica.Avaliar(pedido);
+        DecisaoPermissao decisao = politica.Avaliar(pedido);
         switch (decisao)
         {
             case DecisaoPermissao.Permitir:
@@ -35,7 +35,7 @@ internal sealed class FerramentaPermissao
                 return PermissaoPayload.RespostaNegar("Bloqueado por uma regra de permissão.");
         }
 
-        var resposta = await confirmacao.ConfirmarAsync(pedido, cancellationToken);
+        RespostaConfirmacaoPermissao resposta = await confirmacao.ConfirmarAsync(pedido, cancellationToken);
         politica.Aprender(pedido, resposta);
 
         return resposta.Permitido

@@ -17,7 +17,7 @@ public static class AvaliadorPermissao
         IReadOnlyList<RegraPermissao> regras)
     {
         // 1-2. Regras explícitas do usuário: deny tem prioridade sobre allow.
-        var casadas = regras.Where(r => RegraCasa(r, pedido)).ToList();
+        List<RegraPermissao> casadas = regras.Where(r => RegraCasa(r, pedido)).ToList();
         if (casadas.Any(r => !r.Permitir))
         {
             return DecisaoPermissao.Negar;
@@ -80,7 +80,7 @@ public static class AvaliadorPermissao
 
         if (!string.IsNullOrWhiteSpace(regra.PrefixoCaminho))
         {
-            var alvo = ResolverAlvo(pedido);
+            string? alvo = ResolverAlvo(pedido);
             if (alvo is null || !EstaSob(alvo, regra.PrefixoCaminho))
             {
                 return false;
@@ -89,7 +89,7 @@ public static class AvaliadorPermissao
 
         if (!string.IsNullOrWhiteSpace(regra.Diretorio))
         {
-            var dir = ResolverDiretorio(pedido);
+            string? dir = ResolverDiretorio(pedido);
             if (dir is null || !EstaSob(dir, regra.Diretorio))
             {
                 return false;
@@ -106,14 +106,14 @@ public static class AvaliadorPermissao
             return false;
         }
 
-        var comando = pedido.Comando.ToLowerInvariant();
+        string comando = pedido.Comando.ToLowerInvariant();
         return opcoes.ComandosSempreConfirmar.Any(t => comando.Contains(t.ToLowerInvariant(), StringComparison.Ordinal));
     }
 
     private static bool CaminhoProtegido(PedidoPermissao pedido, PoliticaPermissaoOptions opcoes)
     {
-        var alvo = (pedido.Caminho ?? string.Empty).ToLowerInvariant();
-        var comando = (pedido.Comando ?? string.Empty).ToLowerInvariant();
+        string alvo = (pedido.Caminho ?? string.Empty).ToLowerInvariant();
+        string comando = (pedido.Comando ?? string.Empty).ToLowerInvariant();
         if (alvo.Length == 0 && comando.Length == 0)
         {
             return false;
@@ -121,7 +121,7 @@ public static class AvaliadorPermissao
 
         return opcoes.CaminhosProtegidos.Any(p =>
         {
-            var padrao = p.ToLowerInvariant();
+            string padrao = p.ToLowerInvariant();
             return alvo.Contains(padrao, StringComparison.Ordinal) || comando.Contains(padrao, StringComparison.Ordinal);
         });
     }
@@ -133,7 +133,7 @@ public static class AvaliadorPermissao
             return false;
         }
 
-        var alvo = ResolverAlvo(pedido) ?? ResolverDiretorio(pedido);
+        string? alvo = ResolverAlvo(pedido) ?? ResolverDiretorio(pedido);
         return alvo is not null && opcoes.DiretoriosConfiaveis.Any(d => EstaSob(alvo, d));
     }
 
@@ -147,7 +147,7 @@ public static class AvaliadorPermissao
             return false;
         }
 
-        var comando = pedido.Comando.TrimStart();
+        string comando = pedido.Comando.TrimStart();
         return opcoes.ComandosPermitidos.Any(p => comando.StartsWith(p.TrimStart(), StringComparison.OrdinalIgnoreCase));
     }
 
@@ -161,7 +161,7 @@ public static class AvaliadorPermissao
             return null;
         }
 
-        var caminho = pedido.Caminho;
+        string caminho = pedido.Caminho;
         if (!Path.IsPathRooted(caminho) && !string.IsNullOrWhiteSpace(pedido.DiretorioTrabalho))
         {
             caminho = Path.Combine(pedido.DiretorioTrabalho, caminho);
@@ -175,14 +175,14 @@ public static class AvaliadorPermissao
 
     private static bool EstaSob(string alvo, string diretorio)
     {
-        var raiz = NormalizarCaminho(diretorio);
+        string? raiz = NormalizarCaminho(diretorio);
         if (raiz is null)
         {
             return false;
         }
 
-        var a = alvo.TrimEnd(Path.DirectorySeparatorChar);
-        var r = raiz.TrimEnd(Path.DirectorySeparatorChar);
+        string a = alvo.TrimEnd(Path.DirectorySeparatorChar);
+        string r = raiz.TrimEnd(Path.DirectorySeparatorChar);
 
         return a.Equals(r, Cmp) || a.StartsWith(r + Path.DirectorySeparatorChar, Cmp);
     }

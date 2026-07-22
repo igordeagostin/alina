@@ -34,7 +34,7 @@ public sealed class GitCommitTool : ToolBase
             return "Erro: mensagem de commit vazia.";
         }
 
-        var confirmed = await EnsureConfirmedAsync("Criar commit no Git", $"\"{message}\"" + (stageAll ? " (git add -A)" : ""), cancellationToken);
+        bool confirmed = await EnsureConfirmedAsync("Criar commit no Git", $"\"{message}\"" + (stageAll ? " (git add -A)" : ""), cancellationToken);
         if (!confirmed)
         {
             return "Operação cancelada pelo usuário — nenhum commit foi criado.";
@@ -42,14 +42,14 @@ public sealed class GitCommitTool : ToolBase
 
         if (stageAll)
         {
-            var stage = await GitCommandRunner.RunAsync(_options, repositoryPath, cancellationToken, "add", "-A");
+            GitCommandResult stage = await GitCommandRunner.RunAsync(_options, repositoryPath, cancellationToken, "add", "-A");
             if (!stage.Success)
             {
                 return stage.ToToolResult();
             }
         }
 
-        var commit = await GitCommandRunner.RunAsync(_options, repositoryPath, cancellationToken, "commit", "-m", message);
+        GitCommandResult commit = await GitCommandRunner.RunAsync(_options, repositoryPath, cancellationToken, "commit", "-m", message);
         return commit.ToToolResult();
     }
 }
@@ -81,8 +81,8 @@ public sealed class GitBranchTool : ToolBase
             return "Erro: nome da branch vazio.";
         }
 
-        var args = create ? new[] { "switch", "-c", name } : new[] { "switch", name };
-        var result = await GitCommandRunner.RunAsync(_options, repositoryPath, cancellationToken, args);
+        string[] args = create ? new[] { "switch", "-c", name } : new[] { "switch", name };
+        GitCommandResult result = await GitCommandRunner.RunAsync(_options, repositoryPath, cancellationToken, args);
         return result.ToToolResult();
     }
 }

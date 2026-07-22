@@ -12,7 +12,7 @@ public sealed class ClaudeCodeToolTests
     [Fact]
     public void FormatResult_extrai_texto_e_rodape_de_sucesso()
     {
-        var formatted = ClaudeCodeTool.FormatResult(SuccessJson, stderr: "", exitCode: 0);
+        string formatted = ClaudeCodeTool.FormatResult(SuccessJson, stderr: "", exitCode: 0);
 
         Assert.Contains("Criei o arquivo login.cs", formatted);
         Assert.Contains("3 turno(s)", formatted);
@@ -26,7 +26,7 @@ public sealed class ClaudeCodeToolTests
         const string errorJson =
             "{\"type\":\"result\",\"subtype\":\"error_max_turns\",\"is_error\":true,\"result\":\"limite atingido\"}";
 
-        var formatted = ClaudeCodeTool.FormatResult(errorJson, stderr: "", exitCode: 1);
+        string formatted = ClaudeCodeTool.FormatResult(errorJson, stderr: "", exitCode: 1);
 
         Assert.Contains("erro", formatted, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("limite atingido", formatted);
@@ -39,7 +39,7 @@ public sealed class ClaudeCodeToolTests
             "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"parcial\"," +
             "\"permission_denials\":[{\"tool\":\"Bash\"}]}";
 
-        var formatted = ClaudeCodeTool.FormatResult(deniedJson, stderr: "", exitCode: 0);
+        string formatted = ClaudeCodeTool.FormatResult(deniedJson, stderr: "", exitCode: 0);
 
         Assert.Contains("bloqueada", formatted, StringComparison.OrdinalIgnoreCase);
     }
@@ -47,7 +47,7 @@ public sealed class ClaudeCodeToolTests
     [Fact]
     public void FormatResult_devolve_bruto_quando_json_invalido()
     {
-        var formatted = ClaudeCodeTool.FormatResult("saída não-json qualquer", stderr: "", exitCode: 2);
+        string formatted = ClaudeCodeTool.FormatResult("saída não-json qualquer", stderr: "", exitCode: 2);
 
         Assert.Contains("saída não-json qualquer", formatted);
         Assert.Contains("exit 2", formatted);
@@ -56,10 +56,10 @@ public sealed class ClaudeCodeToolTests
     [Fact]
     public async Task RunAsync_nao_executa_quando_confirmacao_negada()
     {
-        var confirmation = new FakeConfirmationService(result: false);
-        var tool = new ClaudeCodeTool(confirmation, new ClaudeCodeOptions());
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: false);
+        ClaudeCodeTool tool = new ClaudeCodeTool(confirmation, new ClaudeCodeOptions());
 
-        var result = await tool.RunAsync("qualquer tarefa");
+        string result = await tool.RunAsync("qualquer tarefa");
 
         Assert.Equal(1, confirmation.Calls);
         Assert.Contains("cancelada", result, StringComparison.OrdinalIgnoreCase);
@@ -68,10 +68,10 @@ public sealed class ClaudeCodeToolTests
     [Fact]
     public async Task RunAsync_valida_tarefa_vazia()
     {
-        var confirmation = new FakeConfirmationService(result: true);
-        var tool = new ClaudeCodeTool(confirmation, new ClaudeCodeOptions());
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: true);
+        ClaudeCodeTool tool = new ClaudeCodeTool(confirmation, new ClaudeCodeOptions());
 
-        var result = await tool.RunAsync("   ");
+        string result = await tool.RunAsync("   ");
 
         Assert.Equal(0, confirmation.Calls);
         Assert.Contains("nenhuma tarefa", result, StringComparison.OrdinalIgnoreCase);
@@ -83,7 +83,7 @@ public sealed class ClaudeCodeToolTests
     [InlineData("oauth token expired")]
     public void DiagnoseHint_detecta_problema_de_autenticacao(string texto)
     {
-        var hint = ClaudeCodeTool.DiagnoseHint(texto);
+        string? hint = ClaudeCodeTool.DiagnoseHint(texto);
         Assert.NotNull(hint);
         Assert.Contains("autentica", hint!, StringComparison.OrdinalIgnoreCase);
     }
@@ -93,7 +93,7 @@ public sealed class ClaudeCodeToolTests
     [InlineData("Error 429: rate limit")]
     public void DiagnoseHint_detecta_limite_de_uso(string texto)
     {
-        var hint = ClaudeCodeTool.DiagnoseHint(texto);
+        string? hint = ClaudeCodeTool.DiagnoseHint(texto);
         Assert.NotNull(hint);
         Assert.Contains("limite", hint!, StringComparison.OrdinalIgnoreCase);
     }
@@ -105,7 +105,7 @@ public sealed class ClaudeCodeToolTests
     [Fact]
     public void Tool_exige_confirmacao_e_tem_nome_esperado()
     {
-        var tool = new ClaudeCodeTool(new FakeConfirmationService(result: true), new ClaudeCodeOptions());
+        ClaudeCodeTool tool = new ClaudeCodeTool(new FakeConfirmationService(result: true), new ClaudeCodeOptions());
 
         Assert.True(tool.RequiresConfirmation);
         Assert.Equal("delegar_claude_code", tool.Name);
@@ -125,9 +125,9 @@ public sealed class ClaudeCodeToolTests
     [Fact]
     public void InterpretarStreaming_emite_eventos_na_ordem_e_resume_resultado()
     {
-        var eventos = new List<EventoProgressoClaudeCode>();
+        List<EventoProgressoClaudeCode> eventos = new List<EventoProgressoClaudeCode>();
 
-        var resumo = ClaudeCodeTool.InterpretarStreaming(StreamLinhas, stderr: "", exitCode: 0, eventos.Add);
+        string resumo = ClaudeCodeTool.InterpretarStreaming(StreamLinhas, stderr: "", exitCode: 0, eventos.Add);
 
         Assert.Collection(eventos,
             e => Assert.Equal(TipoEventoClaudeCode.Inicio, e.Tipo),
@@ -159,7 +159,7 @@ public sealed class ClaudeCodeToolTests
                 "\"permission_denials\":[{\"tool\":\"Bash\"},{\"tool\":\"Edit\"}]}",
         ];
 
-        var resumo = ClaudeCodeTool.InterpretarStreaming(linhas, stderr: "", exitCode: 1, onEvento: null);
+        string resumo = ClaudeCodeTool.InterpretarStreaming(linhas, stderr: "", exitCode: 1, onEvento: null);
 
         Assert.Contains("erro", resumo, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("2 ação", resumo);
@@ -176,7 +176,7 @@ public sealed class ClaudeCodeToolTests
             "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"ok\"}",
         ];
 
-        var resumo = ClaudeCodeTool.InterpretarStreaming(linhas, stderr: "", exitCode: 0, onEvento: null);
+        string resumo = ClaudeCodeTool.InterpretarStreaming(linhas, stderr: "", exitCode: 0, onEvento: null);
 
         Assert.Contains("ok", resumo);
     }

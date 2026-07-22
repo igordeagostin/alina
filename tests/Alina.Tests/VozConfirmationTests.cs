@@ -35,7 +35,7 @@ public sealed class VozConfirmationTests
     public void Nao_reconhece_ambiguo_ou_vazio(string? texto)
     {
         // "não sei" contém "nao" → deve negar por segurança; os demais retornam null.
-        var resultado = Interpretar(texto);
+        bool? resultado = Interpretar(texto);
         if (texto is not null && texto.Contains("não", StringComparison.OrdinalIgnoreCase))
         {
             Assert.False(resultado);

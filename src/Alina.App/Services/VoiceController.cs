@@ -62,18 +62,18 @@ public sealed class VoiceController
 
     private async Task ConversarAsync()
     {
-        var opcoes = _services.GetRequiredService<VoiceOptions>();
+        VoiceOptions opcoes = _services.GetRequiredService<VoiceOptions>();
         _recorder ??= _services.GetRequiredService<IAudioRecorder>();
         _stt ??= _services.GetRequiredService<ISpeechToText>();
 
         EscutaComecou?.Invoke();
-        var houveInteracao = false;
+        bool houveInteracao = false;
 
         try
         {
             while (true)
             {
-                var texto = await CapturarFalaAsync(opcoes);
+                string texto = await CapturarFalaAsync(opcoes);
                 if (string.IsNullOrWhiteSpace(texto))
                 {
                     if (!houveInteracao)
@@ -110,10 +110,10 @@ public sealed class VoiceController
         _status.Set(AssistantState.Listening);
         _pararGravacao = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var silencio = new DetectorSilencio(
+        DetectorSilencio silencio = new DetectorSilencio(
             TimeSpan.FromSeconds(opcoes.SegundosSilencioParaEncerrar),
             TimeSpan.FromSeconds(opcoes.SegundosJanelaConversa));
-        var nivel = new ProgressoSincrono(v =>
+        ProgressoSincrono nivel = new ProgressoSincrono(v =>
         {
             NivelAudio?.Invoke(v);
             if (silencio.Alimentar(v))
@@ -122,7 +122,7 @@ public sealed class VoiceController
             }
         });
 
-        var wav = await _recorder!.RecordAsync(_ => _pararGravacao.Task, nivel);
+        byte[] wav = await _recorder!.RecordAsync(_ => _pararGravacao.Task, nivel);
 
         _status.Set(AssistantState.Thinking);
         return await _stt!.TranscribeAsync(wav);
@@ -140,9 +140,9 @@ public sealed class VoiceController
             return;
         }
 
-        var opcoes = _services.GetRequiredService<VoiceOptions>();
-        var vozAnterior = opcoes.Voice;
-        var velocidadeAnterior = opcoes.Speed;
+        VoiceOptions opcoes = _services.GetRequiredService<VoiceOptions>();
+        string vozAnterior = opcoes.Voice;
+        float velocidadeAnterior = opcoes.Speed;
 
         try
         {
@@ -153,7 +153,7 @@ public sealed class VoiceController
             opcoes.Voice = voz;
             opcoes.Speed = (float)velocidade;
 
-            var mp3 = await _tts.SynthesizeAsync(FrasePrevia);
+            byte[] mp3 = await _tts.SynthesizeAsync(FrasePrevia);
             await _player.PlayMp3Async(mp3);
         }
         catch (Exception ex)
@@ -207,7 +207,7 @@ public sealed class VoiceController
                 _tts ??= _services.GetRequiredService<ITextToSpeech>();
                 _player ??= _services.GetRequiredService<IAudioPlayer>();
 
-                var mp3 = await _tts.SynthesizeAsync(resposta);
+                byte[] mp3 = await _tts.SynthesizeAsync(resposta);
                 await _player.PlayMp3Async(mp3);
             }
             catch (Exception ex)

@@ -27,7 +27,7 @@ public sealed class ReconfigurableChatClient : IChatClient
     /// </summary>
     public void Reconfigurar(LlmOptions options)
     {
-        var novo = LlmClientFactory.Create(options, _loggerFactory);
+        IChatClient novo = LlmClientFactory.Create(options, _loggerFactory);
         IChatClient antigo;
         lock (_sync)
         {

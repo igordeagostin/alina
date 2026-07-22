@@ -10,6 +10,7 @@ using Alina.Tools;
 using Alina.Tools.Background;
 using Alina.Tools.ClaudeCode;
 using Alina.Tools.Git;
+using Alina.Tools.Habilidades;
 using Alina.Tools.Memory;
 using Alina.Tools.Plugins;
 using Alina.Voice;
@@ -22,8 +23,9 @@ using OpenAI;
 using System.ClientModel;
 
 using SysConsole = System.Console;
+using Alina.Core.Models;
 
-var builder = Host.CreateApplicationBuilder(args);
+HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
 builder.Configuration.AddUserSecrets<Program>(optional: true);
 
@@ -34,7 +36,7 @@ builder.Logging.SetMinimumLevel(LogLevel.Warning);
 builder.Services.AddAlina(builder.Configuration);
 
 // Composição da UI: confirmação roteada (voz no modo voz, console no modo texto) e tools
-var confirmation = new ConfirmacaoRoteada(new ConsoleConfirmationService());
+ConfirmacaoRoteada confirmation = new ConfirmacaoRoteada(new ConsoleConfirmationService());
 builder.Services.AddSingleton(confirmation);
 builder.Services.AddSingleton<IConfirmationService>(confirmation);
 builder.Services.AddSingleton<ITool, TerminalTool>();
@@ -42,7 +44,7 @@ builder.Services.AddSingleton<ITool, FileReadTool>();
 
 // Confirmação de permissão com escopo (uma vez / sempre / sempre neste diretório),
 // roteada entre console e voz conforme o modo ativo.
-var confirmacaoPermissao = new ConfirmacaoPermissaoRoteada(confirmation, new ConfirmacaoPermissaoConsole());
+ConfirmacaoPermissaoRoteada confirmacaoPermissao = new ConfirmacaoPermissaoRoteada(confirmation, new ConfirmacaoPermissaoConsole());
 builder.Services.AddSingleton(confirmacaoPermissao);
 builder.Services.AddSingleton<IConfirmacaoPermissao>(confirmacaoPermissao);
 
@@ -55,7 +57,7 @@ builder.Services.AddSingleton<IServidorPermissao>(sp =>
         sp.GetRequiredService<IContextoPermissao>()));
 
 // Tool do Claude Code (Fase 3) — registrada como concreta e como ITool (mesma instância)
-var claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();
+ClaudeCodeOptions claudeCodeOptions = builder.Configuration.GetSection("ClaudeCode").Get<ClaudeCodeOptions>() ?? new ClaudeCodeOptions();
 builder.Services.AddSingleton(claudeCodeOptions);
 builder.Services.AddSingleton<ClaudeCodeTool>();
 builder.Services.AddSingleton<ITool>(sp => sp.GetRequiredService<ClaudeCodeTool>());
@@ -66,7 +68,7 @@ builder.Services.AddSingleton<ITool, DelegateInBackgroundTool>();
 builder.Services.AddSingleton<ITool, ListTasksTool>();
 
 // Tools de Git (Fase 5)
-var gitOptions = builder.Configuration.GetSection(GitOptions.SectionName).Get<GitOptions>() ?? new GitOptions();
+GitOptions gitOptions = builder.Configuration.GetSection(GitOptions.SectionName).Get<GitOptions>() ?? new GitOptions();
 builder.Services.AddSingleton(gitOptions);
 builder.Services.AddSingleton<ITool, GitStatusTool>();
 builder.Services.AddSingleton<ITool, GitDiffTool>();
@@ -81,16 +83,21 @@ builder.Services.AddSingleton<ITool, RetrieveMemoryTool>();
 builder.Services.AddSingleton<ITool, RecallTool>();
 builder.Services.AddSingleton<ITool, ForgetTool>();
 
+// Tools de habilidades
+builder.Services.AddSingleton<ITool, AprenderHabilidadeTool>();
+builder.Services.AddSingleton<ITool, UsarHabilidadeTool>();
+builder.Services.AddSingleton<ITool, EsquecerHabilidadeTool>();
+
 // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
-var voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();
+VoiceOptions voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();
 builder.Services.AddSingleton(voiceOptions);
 builder.Services.AddSingleton<IAudioRecorder, NAudioRecorder>();
 builder.Services.AddSingleton<IAudioPlayer, NAudioPlayer>();
 builder.Services.AddSingleton(sp =>
 {
     // Reutiliza a chave do LLM se a de voz não estiver definida.
-    var llm = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-    var key = string.IsNullOrWhiteSpace(voiceOptions.ApiKey) ? llm.ApiKey : voiceOptions.ApiKey;
+    LlmOptions llm = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
+    string? key = string.IsNullOrWhiteSpace(voiceOptions.ApiKey) ? llm.ApiKey : voiceOptions.ApiKey;
     if (string.IsNullOrWhiteSpace(key))
     {
         throw new InvalidOperationException("Chave da OpenAI não configurada para voz (Voice:ApiKey ou Llm:ApiKey).");
@@ -103,49 +110,49 @@ builder.Services.AddSingleton<ITextToSpeech, OpenAITextToSpeech>();
 builder.Services.AddSingleton<VoiceChat>();
 
 // Plugins declarativos (Fase 6) — carregados de arquivos *.plugin.json
-var pluginsDir = builder.Configuration.GetValue<string>("Plugins:Directory");
+string? pluginsDir = builder.Configuration.GetValue<string>("Plugins:Directory");
 if (string.IsNullOrWhiteSpace(pluginsDir))
 {
     pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
 }
 
-var pluginResult = PluginLoader.Load(pluginsDir, confirmation);
-foreach (var pluginTool in pluginResult.Tools)
+PluginLoadResult pluginResult = PluginLoader.Load(pluginsDir, confirmation);
+foreach (PluginTool pluginTool in pluginResult.Tools)
 {
     builder.Services.AddSingleton<ITool>(pluginTool);
 }
 
-using var host = builder.Build();
+using IHost host = builder.Build();
 
 if (pluginResult.Tools.Count > 0 || pluginResult.Warnings.Count > 0)
 {
     WriteLineColored($"Plugins: {pluginResult.Tools.Count} carregado(s) de {pluginsDir}", ConsoleColor.DarkGray);
-    foreach (var warning in pluginResult.Warnings)
+    foreach (string warning in pluginResult.Warnings)
     {
         WriteLineColored($"  ⚠ plugin ignorado — {warning}", ConsoleColor.Yellow);
     }
 }
 
-var store = host.Services.GetRequiredService<IConversationStore>();
-var memory = host.Services.GetRequiredService<IMemoryStore>();
-var tasks = host.Services.GetRequiredService<IBackgroundTaskManager>();
+IConversationStore store = host.Services.GetRequiredService<IConversationStore>();
+IMemoryStore memory = host.Services.GetRequiredService<IMemoryStore>();
+IBackgroundTaskManager tasks = host.Services.GetRequiredService<IBackgroundTaskManager>();
 
 // Progresso ao vivo do Claude Code (streaming): mostra o que ele está fazendo no console.
-var claudeCode = host.Services.GetRequiredService<ClaudeCodeTool>();
+ClaudeCodeTool claudeCode = host.Services.GetRequiredService<ClaudeCodeTool>();
 claudeCode.Progresso += EscreverProgressoClaudeCode;
 
 // Notifica no console quando uma tarefa em background termina.
 tasks.TaskFinished += (_, task) =>
 {
-    var color = task.Status == BackgroundTaskStatus.Completed ? ConsoleColor.Green : ConsoleColor.Yellow;
-    var icon = task.Status == BackgroundTaskStatus.Completed ? "✅" : "⚠";
+    ConsoleColor color = task.Status == BackgroundTaskStatus.Completed ? ConsoleColor.Green : ConsoleColor.Yellow;
+    string icon = task.Status == BackgroundTaskStatus.Completed ? "✅" : "⚠";
     WriteLineColored($"\n{icon} Tarefa [{task.Id}] {task.Status}: {task.Description} (veja /tarefa {task.Id})", color);
 };
 
 // Resolução preguiçosa: o IChatClient (e a validação da API key) só é criado
 // no primeiro uso, para o banner e o histórico funcionarem sem chave configurada.
-var orchestrator = new Lazy<IOrchestrator>(() => host.Services.GetRequiredService<IOrchestrator>());
-var voiceChat = new Lazy<VoiceChat>(() => host.Services.GetRequiredService<VoiceChat>());
+Lazy<IOrchestrator> orchestrator = new Lazy<IOrchestrator>(() => host.Services.GetRequiredService<IOrchestrator>());
+Lazy<VoiceChat> voiceChat = new Lazy<VoiceChat>(() => host.Services.GetRequiredService<VoiceChat>());
 
 await RunReplAsync(orchestrator, store, voiceChat, memory, pluginResult.Tools, tasks);
 return;
@@ -157,7 +164,7 @@ static async Task RunReplAsync(Lazy<IOrchestrator> orchestrator, IConversationSt
     while (true)
     {
         WriteColored("\nVocê> ", ConsoleColor.Cyan);
-        var input = SysConsole.ReadLine();
+        string? input = SysConsole.ReadLine();
 
         if (input is null)
         {
@@ -179,8 +186,8 @@ static async Task RunReplAsync(Lazy<IOrchestrator> orchestrator, IConversationSt
 
         if (input.StartsWith("/cancelar ", StringComparison.OrdinalIgnoreCase))
         {
-            var id = input[10..].Trim();
-            var cancelled = tasks.Cancel(id);
+            string id = input[10..].Trim();
+            bool cancelled = tasks.Cancel(id);
             WriteLineColored(cancelled ? $"Cancelamento solicitado para [{id}]." : $"Tarefa [{id}] não está em execução.", ConsoleColor.DarkGray);
             continue;
         }
@@ -257,7 +264,7 @@ static async Task RunReplAsync(Lazy<IOrchestrator> orchestrator, IConversationSt
         try
         {
             WriteColored("Alina> ", ConsoleColor.Green);
-            var response = await orchestrator.Value.SendAsync(input);
+            string response = await orchestrator.Value.SendAsync(input);
             SysConsole.WriteLine(response);
         }
         catch (Exception ex)
@@ -269,7 +276,7 @@ static async Task RunReplAsync(Lazy<IOrchestrator> orchestrator, IConversationSt
 
 static async Task PrintHistoryAsync(IConversationStore store)
 {
-    var conversations = await store.ListAsync();
+    IReadOnlyList<ConversationSummary> conversations = await store.ListAsync();
     if (conversations.Count == 0)
     {
         WriteLineColored("Nenhuma conversa no histórico.", ConsoleColor.DarkGray);
@@ -277,7 +284,7 @@ static async Task PrintHistoryAsync(IConversationStore store)
     }
 
     WriteLineColored("Histórico de conversas:", ConsoleColor.DarkGray);
-    foreach (var c in conversations)
+    foreach (ConversationSummary c in conversations)
     {
         WriteLineColored($"  [{c.UpdatedAt:yyyy-MM-dd HH:mm}] {c.Title} ({c.MessageCount} msgs) — {c.Id}", ConsoleColor.DarkGray);
     }
@@ -285,7 +292,7 @@ static async Task PrintHistoryAsync(IConversationStore store)
 
 static async Task PrintMemoriesAsync(IMemoryStore memory)
 {
-    var items = await memory.GetAllAsync();
+    IReadOnlyList<MemoryItem> items = await memory.GetAllAsync();
     if (items.Count == 0)
     {
         WriteLineColored("Nenhuma memória salva ainda.", ConsoleColor.DarkGray);
@@ -293,18 +300,18 @@ static async Task PrintMemoriesAsync(IMemoryStore memory)
     }
 
     WriteLineColored("Memórias permanentes:", ConsoleColor.DarkGray);
-    foreach (var item in items)
+    foreach (MemoryItem item in items)
     {
-        var category = string.IsNullOrWhiteSpace(item.Category) ? string.Empty : $" ({item.Category})";
-        var kind = item.Kind == MemoryKind.Procedure ? "⚙ " : string.Empty;
-        var pin = item.Pinned ? "📌 " : string.Empty;
+        string category = string.IsNullOrWhiteSpace(item.Category) ? string.Empty : $" ({item.Category})";
+        string kind = item.Kind == MemoryKind.Procedure ? "⚙ " : string.Empty;
+        string pin = item.Pinned ? "📌 " : string.Empty;
         WriteLineColored($"  [{item.Id}] {pin}{kind}{category} {item.DisplayTitle()}", ConsoleColor.DarkGray);
     }
 }
 
 static async Task RememberConversationAsync(IOrchestrator orchestrator, IMemoryStore memory)
 {
-    var convo = orchestrator.Current;
+    Conversation convo = orchestrator.Current;
     if (convo.Messages.Count == 0)
     {
         WriteLineColored("Nada para memorizar: a conversa atual está vazia.", ConsoleColor.DarkGray);
@@ -312,14 +319,14 @@ static async Task RememberConversationAsync(IOrchestrator orchestrator, IMemoryS
     }
 
     WriteLineColored("Resumindo a conversa…", ConsoleColor.DarkGray);
-    var summary = await orchestrator.SummarizeConversationAsync();
+    string summary = await orchestrator.SummarizeConversationAsync();
     if (string.IsNullOrWhiteSpace(summary))
     {
         WriteLineColored("Não foi possível gerar um resumo da conversa.", ConsoleColor.Yellow);
         return;
     }
 
-    var item = new MemoryItem
+    MemoryItem item = new MemoryItem
     {
         Kind = MemoryKind.Fact,
         Title = $"Resumo: {convo.Title}",
@@ -333,7 +340,7 @@ static async Task RememberConversationAsync(IOrchestrator orchestrator, IMemoryS
 
 static void PrintTasks(IBackgroundTaskManager tasks)
 {
-    var all = tasks.GetAll();
+    IReadOnlyList<BackgroundTask> all = tasks.GetAll();
     if (all.Count == 0)
     {
         WriteLineColored("Nenhuma tarefa em background.", ConsoleColor.DarkGray);
@@ -341,7 +348,7 @@ static void PrintTasks(IBackgroundTaskManager tasks)
     }
 
     WriteLineColored("Tarefas em background:", ConsoleColor.DarkGray);
-    foreach (var task in all)
+    foreach (BackgroundTask task in all)
     {
         WriteLineColored($"  [{task.Id}] {task.Status}: {task.Description}", ConsoleColor.DarkGray);
     }
@@ -350,7 +357,7 @@ static void PrintTasks(IBackgroundTaskManager tasks)
 
 static void PrintTaskDetail(IBackgroundTaskManager tasks, string id)
 {
-    var task = tasks.Get(id);
+    BackgroundTask? task = tasks.Get(id);
     if (task is null)
     {
         WriteLineColored($"Tarefa [{id}] não encontrada.", ConsoleColor.DarkGray);
@@ -377,9 +384,9 @@ static void PrintPlugins(IReadOnlyList<PluginTool> plugins)
     }
 
     WriteLineColored("Plugins carregados:", ConsoleColor.DarkGray);
-    foreach (var plugin in plugins)
+    foreach (PluginTool plugin in plugins)
     {
-        var flag = plugin.RequiresConfirmation ? " (confirmação)" : string.Empty;
+        string flag = plugin.RequiresConfirmation ? " (confirmação)" : string.Empty;
         WriteLineColored($"  {plugin.Name}{flag} — {plugin.Description}", ConsoleColor.DarkGray);
     }
 }
@@ -422,7 +429,7 @@ static void EscreverProgressoClaudeCode(EventoProgressoClaudeCode e)
 
 static void WriteColored(string text, ConsoleColor color)
 {
-    var previous = SysConsole.ForegroundColor;
+    ConsoleColor previous = SysConsole.ForegroundColor;
     SysConsole.ForegroundColor = color;
     SysConsole.Write(text);
     SysConsole.ForegroundColor = previous;
@@ -430,7 +437,7 @@ static void WriteColored(string text, ConsoleColor color)
 
 static void WriteLineColored(string text, ConsoleColor color)
 {
-    var previous = SysConsole.ForegroundColor;
+    ConsoleColor previous = SysConsole.ForegroundColor;
     SysConsole.ForegroundColor = color;
     SysConsole.WriteLine(text);
     SysConsole.ForegroundColor = previous;

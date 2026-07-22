@@ -14,14 +14,14 @@ public sealed class UiConfirmacaoPermissao : IConfirmacaoPermissao
 
     public async Task<RespostaConfirmacaoPermissao> ConfirmarAsync(PedidoPermissao pedido, CancellationToken cancellationToken = default)
     {
-        var handler = Requested;
+        Func<PedidoPermissaoUi, Task>? handler = Requested;
         if (handler is null)
         {
             return RespostaConfirmacaoPermissao.Negada;
         }
 
-        var request = new PedidoPermissaoUi(pedido);
-        await using var _ = cancellationToken.Register(() => request.Responder(RespostaConfirmacaoPermissao.Negada));
+        PedidoPermissaoUi request = new PedidoPermissaoUi(pedido);
+        await using CancellationTokenRegistration _ = cancellationToken.Register(() => request.Responder(RespostaConfirmacaoPermissao.Negada));
 
         await handler(request);
         return await request.Resposta;

@@ -49,10 +49,10 @@ public sealed class VoiceChat
 
         // Confirmações passam a ser faladas/ouvidas enquanto o modo voz estiver ativo;
         // o console continua como fallback se a voz não compreender.
-        var vozConfirmacao = new VozConfirmationService(_tts, _stt, _recorder, _player, _options, fallback: new ConsoleConfirmationService());
+        VozConfirmationService vozConfirmacao = new VozConfirmationService(_tts, _stt, _recorder, _player, _options, fallback: new ConsoleConfirmationService());
         _confirmacao.DefinirVoz(vozConfirmacao);
 
-        var vozPermissao = new ConfirmacaoPermissaoVoz(_tts, _stt, _recorder, _player, _options,
+        ConfirmacaoPermissaoVoz vozPermissao = new ConfirmacaoPermissaoVoz(_tts, _stt, _recorder, _player, _options,
             fallback: new ConfirmacaoPermissaoConsole());
         _confirmacaoPermissao.DefinirVoz(vozPermissao);
 
@@ -72,14 +72,14 @@ public sealed class VoiceChat
         while (true)
         {
             Write("\n[voz] Enter para gravar (ou /texto): ", ConsoleColor.Cyan);
-            var command = SysConsole.ReadLine();
+            string? command = SysConsole.ReadLine();
 
             if (command is null)
             {
                 return;
             }
 
-            var trimmed = command.Trim().ToLowerInvariant();
+            string trimmed = command.Trim().ToLowerInvariant();
             if (trimmed is "/texto" or "/sair" or "/exit")
             {
                 WriteLine("Voltando ao modo texto.", ConsoleColor.DarkGray);
@@ -101,10 +101,10 @@ public sealed class VoiceChat
     {
         WriteLine("🔴 Gravando... (Enter para parar)", ConsoleColor.Red);
 
-        var audio = await _recorder.RecordAsync(_ => Task.Run(() => SysConsole.ReadLine()));
+        byte[] audio = await _recorder.RecordAsync(_ => Task.Run(() => SysConsole.ReadLine()));
 
         Write("⏳ Transcrevendo... ", ConsoleColor.DarkGray);
-        var text = await _stt.TranscribeAsync(audio);
+        string text = await _stt.TranscribeAsync(audio);
 
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -115,18 +115,18 @@ public sealed class VoiceChat
         WriteLine($"\nVocê (voz)> {text}", ConsoleColor.Cyan);
 
         Write("Alina> ", ConsoleColor.Green);
-        var response = await _orchestrator.SendAsync(text);
+        string response = await _orchestrator.SendAsync(text);
         SysConsole.WriteLine(response);
 
         Write("🔊 Falando...", ConsoleColor.DarkGray);
-        var mp3 = await _tts.SynthesizeAsync(response);
+        byte[] mp3 = await _tts.SynthesizeAsync(response);
         await _player.PlayMp3Async(mp3);
         SysConsole.WriteLine();
     }
 
     private static void Write(string text, ConsoleColor color)
     {
-        var previous = SysConsole.ForegroundColor;
+        ConsoleColor previous = SysConsole.ForegroundColor;
         SysConsole.ForegroundColor = color;
         SysConsole.Write(text);
         SysConsole.ForegroundColor = previous;
@@ -134,7 +134,7 @@ public sealed class VoiceChat
 
     private static void WriteLine(string text, ConsoleColor color)
     {
-        var previous = SysConsole.ForegroundColor;
+        ConsoleColor previous = SysConsole.ForegroundColor;
         SysConsole.ForegroundColor = color;
         SysConsole.WriteLine(text);
         SysConsole.ForegroundColor = previous;

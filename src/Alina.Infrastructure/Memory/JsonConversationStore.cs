@@ -30,33 +30,33 @@ public sealed class JsonConversationStore : IConversationStore
 
     public async Task SaveAsync(Conversation conversation, CancellationToken cancellationToken = default)
     {
-        var path = PathFor(conversation.Id);
-        await using var stream = File.Create(path);
+        string path = PathFor(conversation.Id);
+        await using FileStream stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, conversation, JsonOptions, cancellationToken);
     }
 
     public async Task<Conversation?> LoadAsync(string id, CancellationToken cancellationToken = default)
     {
-        var path = PathFor(id);
+        string path = PathFor(id);
         if (!File.Exists(path))
         {
             return null;
         }
 
-        await using var stream = File.OpenRead(path);
+        await using FileStream stream = File.OpenRead(path);
         return await JsonSerializer.DeserializeAsync<Conversation>(stream, JsonOptions, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ConversationSummary>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var summaries = new List<ConversationSummary>();
+        List<ConversationSummary> summaries = new List<ConversationSummary>();
 
-        foreach (var file in Directory.EnumerateFiles(_directory, "*.json"))
+        foreach (string file in Directory.EnumerateFiles(_directory, "*.json"))
         {
             try
             {
-                await using var stream = File.OpenRead(file);
-                var conversation = await JsonSerializer.DeserializeAsync<Conversation>(stream, JsonOptions, cancellationToken);
+                await using FileStream stream = File.OpenRead(file);
+                Conversation? conversation = await JsonSerializer.DeserializeAsync<Conversation>(stream, JsonOptions, cancellationToken);
                 if (conversation is not null)
                 {
                     summaries.Add(new ConversationSummary(
@@ -79,7 +79,7 @@ public sealed class JsonConversationStore : IConversationStore
 
     private string PathFor(string id)
     {
-        var safeId = string.Concat(id.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_'));
+        string safeId = string.Concat(id.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_'));
         if (string.IsNullOrEmpty(safeId))
         {
             throw new ArgumentException("Id de conversa inválido.", nameof(id));

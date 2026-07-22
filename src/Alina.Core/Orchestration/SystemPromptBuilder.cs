@@ -1,4 +1,5 @@
 using System.Text;
+using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Tools;
 
@@ -11,9 +12,10 @@ public static class SystemPromptBuilder
         IReadOnlyList<ITool> tools,
         string? preferences,
         IReadOnlyList<MemoryIndexEntry>? memoryIndex = null,
-        IReadOnlyList<MemoryItem>? detailedMemories = null)
+        IReadOnlyList<MemoryItem>? detailedMemories = null,
+        IReadOnlyList<HabilidadeResumo>? habilidades = null)
     {
-        var sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
         sb.AppendLine("Você é a Alina, a assistente pessoal de desenvolvimento de software do usuário — no espírito do Jarvis do Tony Stark: competente, direta e com um humor seco na medida certa.");
         sb.AppendLine();
         sb.AppendLine("Personalidade e postura:");
@@ -32,9 +34,9 @@ public static class SystemPromptBuilder
         if (tools.Count > 0)
         {
             sb.AppendLine("Ferramentas disponíveis:");
-            foreach (var tool in tools)
+            foreach (ITool tool in tools)
             {
-                var flag = tool.RequiresConfirmation ? " (exige confirmação do usuário)" : string.Empty;
+                string flag = tool.RequiresConfirmation ? " (exige confirmação do usuário)" : string.Empty;
                 sb.AppendLine($"- {tool.Name}: {tool.Description}{flag}");
             }
             sb.AppendLine();
@@ -57,7 +59,7 @@ public static class SystemPromptBuilder
             sb.AppendLine();
             sb.AppendLine("Memórias relevantes para este pedido (fixadas + mais próximas; " +
                           "cada item tem um id entre colchetes que pode ser usado para esquecê-lo):");
-            foreach (var memory in detailedMemories)
+            foreach (MemoryItem memory in detailedMemories)
             {
                 sb.AppendLine($"- {FormatDetailed(memory)}");
             }
@@ -68,11 +70,23 @@ public static class SystemPromptBuilder
             sb.AppendLine();
             sb.AppendLine("Índice do que você já sabe (títulos apenas). Se precisar do conteúdo completo de " +
                           "algum item que não esteja detalhado acima, chame a ferramenta 'recuperar_memoria' com o id ou uma consulta:");
-            foreach (var entry in memoryIndex)
+            foreach (MemoryIndexEntry entry in memoryIndex)
             {
-                var kind = entry.Kind == MemoryKind.Procedure ? "procedimento" : "fato";
-                var category = string.IsNullOrWhiteSpace(entry.Category) ? string.Empty : $"/{entry.Category}";
+                string kind = entry.Kind == MemoryKind.Procedure ? "procedimento" : "fato";
+                string category = string.IsNullOrWhiteSpace(entry.Category) ? string.Empty : $"/{entry.Category}";
                 sb.AppendLine($"- [{entry.Id}] ({kind}{category}) {entry.Title}");
+            }
+        }
+
+        if (habilidades is { Count: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine("Habilidades que você aprendeu (nome — descrição). Quando uma delas for relevante " +
+                          "para o pedido, chame a ferramenta 'usar_habilidade' com o nome para carregar as " +
+                          "instruções completas antes de agir:");
+            foreach (HabilidadeResumo habilidade in habilidades)
+            {
+                sb.AppendLine($"- {habilidade.Nome} — {habilidade.Descricao}");
             }
         }
 
@@ -81,11 +95,11 @@ public static class SystemPromptBuilder
 
     private static string FormatDetailed(MemoryItem memory)
     {
-        var pin = memory.Pinned ? "📌 " : string.Empty;
-        var category = string.IsNullOrWhiteSpace(memory.Category) ? string.Empty : $" ({memory.Category})";
+        string pin = memory.Pinned ? "📌 " : string.Empty;
+        string category = string.IsNullOrWhiteSpace(memory.Category) ? string.Empty : $" ({memory.Category})";
         if (memory.Kind == MemoryKind.Procedure)
         {
-            var name = memory.DisplayTitle();
+            string name = memory.DisplayTitle();
             return $"{pin}[{memory.Id}]{category} procedimento \"{name}\":\n{memory.Content}";
         }
 

@@ -39,15 +39,15 @@ public sealed class TerminalTool : ToolBase
             return "Erro: comando vazio.";
         }
 
-        var confirmed = await EnsureConfirmedAsync("Executar comando no terminal", command, cancellationToken);
+        bool confirmed = await EnsureConfirmedAsync("Executar comando no terminal", command, cancellationToken);
         if (!confirmed)
         {
             return "Operação cancelada pelo usuário — o comando NÃO foi executado.";
         }
 
-        var (fileName, arguments) = BuildShellInvocation(command);
+        (string? fileName, string? arguments) = BuildShellInvocation(command);
 
-        var psi = new ProcessStartInfo
+        ProcessStartInfo psi = new ProcessStartInfo
         {
             FileName = fileName,
             Arguments = arguments,
@@ -62,8 +62,8 @@ public sealed class TerminalTool : ToolBase
 
         try
         {
-            using var process = new Process { StartInfo = psi };
-            var output = new StringBuilder();
+            using Process process = new Process { StartInfo = psi };
+            StringBuilder output = new StringBuilder();
 
             process.OutputDataReceived += (_, e) => { if (e.Data is not null) output.AppendLine(e.Data); };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) output.AppendLine(e.Data); };
@@ -72,7 +72,7 @@ public sealed class TerminalTool : ToolBase
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(DefaultTimeout);
 
             try
@@ -85,7 +85,7 @@ public sealed class TerminalTool : ToolBase
                 return $"Erro: comando excedeu o tempo limite de {DefaultTimeout.TotalSeconds:0} segundos e foi encerrado.\n{output}";
             }
 
-            var result = output.ToString().TrimEnd();
+            string result = output.ToString().TrimEnd();
             return $"[exit code {process.ExitCode}]\n{result}";
         }
         catch (Exception ex)
@@ -99,11 +99,11 @@ public sealed class TerminalTool : ToolBase
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             // Escapa aspas duplas para passar o comando como um único argumento ao PowerShell.
-            var escaped = command.Replace("\"", "\\\"");
+            string escaped = command.Replace("\"", "\\\"");
             return ("powershell.exe", $"-NoProfile -NonInteractive -Command \"{escaped}\"");
         }
 
-        var bashEscaped = command.Replace("\"", "\\\"");
+        string bashEscaped = command.Replace("\"", "\\\"");
         return ("/bin/bash", $"-c \"{bashEscaped}\"");
     }
 

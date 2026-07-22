@@ -110,7 +110,7 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
 
     private void AoReceberAudio(object? sender, WaveInEventArgs e)
     {
-        var reconhecedor = _reconhecedor;
+        VoskRecognizer? reconhecedor = _reconhecedor;
         if (!_capturando || !_podeDisparar || reconhecedor is null)
         {
             return;
@@ -118,8 +118,8 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
 
         try
         {
-            var completo = reconhecedor.AcceptWaveform(e.Buffer, e.BytesRecorded);
-            var texto = ExtrairTexto(completo ? reconhecedor.Result() : reconhecedor.PartialResult(), completo);
+            bool completo = reconhecedor.AcceptWaveform(e.Buffer, e.BytesRecorded);
+            string texto = ExtrairTexto(completo ? reconhecedor.Result() : reconhecedor.PartialResult(), completo);
             if (ContemPalavra(texto))
             {
                 _podeDisparar = false;
@@ -136,14 +136,14 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
 
     private static string ExtrairTexto(string json, bool completo)
     {
-        using var doc = JsonDocument.Parse(json);
-        var campo = completo ? "text" : "partial";
-        return doc.RootElement.TryGetProperty(campo, out var valor) ? valor.GetString() ?? string.Empty : string.Empty;
+        using JsonDocument doc = JsonDocument.Parse(json);
+        string campo = completo ? "text" : "partial";
+        return doc.RootElement.TryGetProperty(campo, out JsonElement valor) ? valor.GetString() ?? string.Empty : string.Empty;
     }
 
     private string MontarGramatica()
     {
-        var frases = _opcoes.PalavrasAtivacao
+        IEnumerable<string> frases = _opcoes.PalavrasAtivacao
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim().ToLowerInvariant())
             .Distinct()
@@ -159,7 +159,7 @@ public sealed class VoskDetectorPalavra : IDetectorPalavraAtivacao
             return false;
         }
 
-        foreach (var palavra in _opcoes.PalavrasAtivacao)
+        foreach (string palavra in _opcoes.PalavrasAtivacao)
         {
             if (texto.Contains(palavra, StringComparison.OrdinalIgnoreCase))
             {

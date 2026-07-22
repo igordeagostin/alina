@@ -37,14 +37,14 @@ public sealed class ConfirmacaoPermissaoVoz : IConfirmacaoPermissao
 
     public async Task<RespostaConfirmacaoPermissao> ConfirmarAsync(PedidoPermissao pedido, CancellationToken cancellationToken = default)
     {
-        var pergunta = $"{pedido.Descricao.TrimEnd('.')}. Autorizo? Diga sim, sempre, ou não.";
+        string pergunta = $"{pedido.Descricao.TrimEnd('.')}. Autorizo? Diga sim, sempre, ou não.";
         await FalarAsync(pergunta, cancellationToken);
 
-        var tentativas = Math.Max(1, _options.TentativasConfirmacaoVoz);
-        for (var i = 0; i < tentativas; i++)
+        int tentativas = Math.Max(1, _options.TentativasConfirmacaoVoz);
+        for (int i = 0; i < tentativas; i++)
         {
-            var texto = await CapturarAsync(cancellationToken);
-            var decisao = Interpretar(texto, _options.PalavrasSim, _options.PalavrasNao);
+            string? texto = await CapturarAsync(cancellationToken);
+            RespostaConfirmacaoPermissao? decisao = Interpretar(texto, _options.PalavrasSim, _options.PalavrasNao);
             if (decisao is not null)
             {
                 await FalarAsync(MensagemConfirmacao(decisao), cancellationToken);
@@ -77,7 +77,7 @@ public sealed class ConfirmacaoPermissaoVoz : IConfirmacaoPermissao
             return null;
         }
 
-        var frase = TextoVoz.Normalizar(texto);
+        string frase = TextoVoz.Normalizar(texto);
         if (frase.Trim().Length == 0)
         {
             return null;
@@ -88,8 +88,8 @@ public sealed class ConfirmacaoPermissaoVoz : IConfirmacaoPermissao
             return RespostaConfirmacaoPermissao.Negada;
         }
 
-        var sempre = TextoVoz.ContemAlgum(frase, TermosSempre);
-        var noDiretorio = TextoVoz.ContemAlgum(frase, TermosDiretorio);
+        bool sempre = TextoVoz.ContemAlgum(frase, TermosSempre);
+        bool noDiretorio = TextoVoz.ContemAlgum(frase, TermosDiretorio);
 
         if (sempre)
         {
@@ -114,14 +114,14 @@ public sealed class ConfirmacaoPermissaoVoz : IConfirmacaoPermissao
 
     private async Task<string?> CapturarAsync(CancellationToken cancellationToken)
     {
-        var janela = TimeSpan.FromSeconds(Math.Max(2, _options.SegundosRespostaConfirmacao));
-        var audio = await _recorder.RecordAsync(ct => Task.Delay(janela, ct), nivel: null, cancellationToken);
+        TimeSpan janela = TimeSpan.FromSeconds(Math.Max(2, _options.SegundosRespostaConfirmacao));
+        byte[] audio = await _recorder.RecordAsync(ct => Task.Delay(janela, ct), nivel: null, cancellationToken);
         return await _stt.TranscribeAsync(audio, cancellationToken);
     }
 
     private async Task FalarAsync(string texto, CancellationToken cancellationToken)
     {
-        var mp3 = await _tts.SynthesizeAsync(texto, cancellationToken);
+        byte[] mp3 = await _tts.SynthesizeAsync(texto, cancellationToken);
         await _player.PlayMp3Async(mp3, cancellationToken);
     }
 }

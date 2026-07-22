@@ -47,15 +47,15 @@ public sealed class DelegateInBackgroundTool : ToolBase
             return "Erro: nenhuma tarefa informada.";
         }
 
-        var confirmed = await EnsureConfirmedAsync(
+        bool confirmed = await EnsureConfirmedAsync(
             "Iniciar tarefa do Claude Code em background", task, cancellationToken);
         if (!confirmed)
         {
             return "Operação cancelada pelo usuário — nada foi iniciado.";
         }
 
-        var description = task.Length > 60 ? task[..60] + "…" : task;
-        var backgroundTask = _manager.Start(description, ct => _claudeCode.ExecuteAsync(task, workingDirectory, ct));
+        string description = task.Length > 60 ? task[..60] + "…" : task;
+        BackgroundTask backgroundTask = _manager.Start(description, ct => _claudeCode.ExecuteAsync(task, workingDirectory, ct));
 
         return $"Tarefa [{backgroundTask.Id}] iniciada em background. " +
                "Continue conversando; avisarei quando terminar (ou use listar_tarefas / o comando /tarefas).";
@@ -79,14 +79,14 @@ public sealed class ListTasksTool : ToolBase
     [Description("Retorna o status das tarefas em background.")]
     public Task<string> RunAsync(CancellationToken cancellationToken = default)
     {
-        var tasks = _manager.GetAll();
+        IReadOnlyList<BackgroundTask> tasks = _manager.GetAll();
         if (tasks.Count == 0)
         {
             return Task.FromResult("Nenhuma tarefa em background.");
         }
 
-        var sb = new StringBuilder();
-        foreach (var task in tasks)
+        StringBuilder sb = new StringBuilder();
+        foreach (BackgroundTask task in tasks)
         {
             sb.AppendLine($"[{task.Id}] {task.Status}: {task.Description}");
         }

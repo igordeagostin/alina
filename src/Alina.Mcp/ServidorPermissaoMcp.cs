@@ -61,7 +61,7 @@ public sealed class ServidorPermissaoMcp : IServidorPermissao
                 return _url;
             }
 
-            var builder = WebApplication.CreateSlimBuilder();
+            WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders();
             builder.WebHost.UseUrls($"http://127.0.0.1:{_porta}");
             builder.Services.AddSingleton(_politica);
@@ -69,13 +69,13 @@ public sealed class ServidorPermissaoMcp : IServidorPermissao
             builder.Services.AddSingleton(_contexto);
             builder.Services.AddMcpServer().WithHttpTransport().WithTools<FerramentaPermissao>();
 
-            var app = builder.Build();
+            WebApplication app = builder.Build();
             app.MapMcp("/mcp");
 
             await app.StartAsync(cancellationToken);
 
-            var enderecos = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
-            var baseUrl = enderecos?.Addresses.FirstOrDefault()
+            IServerAddressesFeature? enderecos = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
+            string baseUrl = enderecos?.Addresses.FirstOrDefault()
                 ?? throw new InvalidOperationException("Não foi possível determinar o endereço do servidor de permissão.");
 
             _url = baseUrl.TrimEnd('/') + "/mcp";

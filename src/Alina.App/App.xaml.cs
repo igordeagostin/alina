@@ -28,15 +28,16 @@ public partial class App : System.Windows.Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         _host = Composition.BuildHost();
-        var services = _host.Services;
+        IServiceProvider services = _host.Services;
 
         // Carrega e aplica as preferências antes de montar a janela (define o modo inicial).
         services.GetRequiredService<ConfiguracoesService>();
+        services.GetRequiredService<ConfiguracoesClaudeCodeService>();
 
         _window = new MainWindow(services);
 
         // Garante o HWND mesmo iniciando oculto (necessário para a hotkey global).
-        var handle = new WindowInteropHelper(_window).EnsureHandle();
+        nint handle = new WindowInteropHelper(_window).EnsureHandle();
 
         _hotkey = new GlobalHotkey();
         _hotkey.Pressionado += AoPressionarHotkey;
@@ -53,7 +54,7 @@ public partial class App : System.Windows.Application
 
     private void AoPressionarHotkey()
     {
-        var voz = Services.GetRequiredService<VoiceController>();
+        VoiceController voz = Services.GetRequiredService<VoiceController>();
         Dispatcher.InvokeAsync(() => _ = voz.AlternarEscutaAsync());
     }
 

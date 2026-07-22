@@ -8,7 +8,7 @@ public sealed class BackgroundTaskManagerTests
 {
     private static Task<BackgroundTask> WhenFinished(BackgroundTaskManager manager)
     {
-        var tcs = new TaskCompletionSource<BackgroundTask>(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<BackgroundTask> tcs = new TaskCompletionSource<BackgroundTask>(TaskCreationOptions.RunContinuationsAsynchronously);
         manager.TaskFinished += (_, t) => tcs.TrySetResult(t);
         return tcs.Task;
     }
@@ -16,11 +16,11 @@ public sealed class BackgroundTaskManagerTests
     [Fact]
     public async Task Start_executa_e_marca_concluida()
     {
-        using var manager = new BackgroundTaskManager();
-        var finished = WhenFinished(manager);
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
+        Task<BackgroundTask> finished = WhenFinished(manager);
 
-        var task = manager.Start("tarefa teste", _ => Task.FromResult("resultado ok"));
-        var result = await finished.WaitAsync(TimeSpan.FromSeconds(5));
+        BackgroundTask task = manager.Start("tarefa teste", _ => Task.FromResult("resultado ok"));
+        BackgroundTask result = await finished.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(task.Id, result.Id);
         Assert.Equal(BackgroundTaskStatus.Completed, result.Status);
@@ -31,11 +31,11 @@ public sealed class BackgroundTaskManagerTests
     [Fact]
     public async Task Start_captura_excecao_como_falha()
     {
-        using var manager = new BackgroundTaskManager();
-        var finished = WhenFinished(manager);
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
+        Task<BackgroundTask> finished = WhenFinished(manager);
 
         manager.Start("vai falhar", _ => throw new InvalidOperationException("boom"));
-        var result = await finished.WaitAsync(TimeSpan.FromSeconds(5));
+        BackgroundTask result = await finished.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(BackgroundTaskStatus.Failed, result.Status);
         Assert.Contains("boom", result.Result);
@@ -44,32 +44,32 @@ public sealed class BackgroundTaskManagerTests
     [Fact]
     public async Task Cancel_interrompe_tarefa_em_execucao()
     {
-        using var manager = new BackgroundTaskManager();
-        var finished = WhenFinished(manager);
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
+        Task<BackgroundTask> finished = WhenFinished(manager);
 
-        var task = manager.Start("longa", async ct =>
+        BackgroundTask task = manager.Start("longa", async ct =>
         {
             await Task.Delay(Timeout.Infinite, ct);
             return "nunca chega aqui";
         });
 
         Assert.True(manager.Cancel(task.Id));
-        var result = await finished.WaitAsync(TimeSpan.FromSeconds(5));
+        BackgroundTask result = await finished.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(BackgroundTaskStatus.Cancelled, result.Status);
     }
 
     [Fact]
     public void Cancel_de_id_inexistente_retorna_false()
     {
-        using var manager = new BackgroundTaskManager();
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
         Assert.False(manager.Cancel("naoexiste"));
     }
 
     [Fact]
     public void Get_e_GetAll_refletem_a_tarefa()
     {
-        using var manager = new BackgroundTaskManager();
-        var task = manager.Start("x", _ => Task.FromResult("ok"));
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
+        BackgroundTask task = manager.Start("x", _ => Task.FromResult("ok"));
 
         Assert.NotNull(manager.Get(task.Id));
         Assert.Contains(manager.GetAll(), t => t.Id == task.Id);
@@ -81,11 +81,11 @@ public sealed class BackgroundToolsTests
     [Fact]
     public async Task DelegateInBackground_negado_nao_inicia_tarefa()
     {
-        using var manager = new BackgroundTaskManager();
-        var claude = new ClaudeCodeTool(new FakeConfirmationService(true), new ClaudeCodeOptions());
-        var tool = new DelegateInBackgroundTool(new FakeConfirmationService(result: false), manager, claude);
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
+        ClaudeCodeTool claude = new ClaudeCodeTool(new FakeConfirmationService(true), new ClaudeCodeOptions());
+        DelegateInBackgroundTool tool = new DelegateInBackgroundTool(new FakeConfirmationService(result: false), manager, claude);
 
-        var result = await tool.RunAsync("faça algo demorado");
+        string result = await tool.RunAsync("faça algo demorado");
 
         Assert.Contains("cancelada", result, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(manager.GetAll());
@@ -94,11 +94,11 @@ public sealed class BackgroundToolsTests
     [Fact]
     public async Task ListTasks_reporta_tarefas()
     {
-        using var manager = new BackgroundTaskManager();
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
         manager.Start("minha tarefa", _ => Task.FromResult("ok"));
-        var tool = new ListTasksTool(new FakeConfirmationService(true), manager);
+        ListTasksTool tool = new ListTasksTool(new FakeConfirmationService(true), manager);
 
-        var result = await tool.RunAsync();
+        string result = await tool.RunAsync();
 
         Assert.Contains("minha tarefa", result);
     }
@@ -106,9 +106,9 @@ public sealed class BackgroundToolsTests
     [Fact]
     public void DelegateInBackground_exige_confirmacao()
     {
-        using var manager = new BackgroundTaskManager();
-        var claude = new ClaudeCodeTool(new FakeConfirmationService(true), new ClaudeCodeOptions());
-        var tool = new DelegateInBackgroundTool(new FakeConfirmationService(true), manager, claude);
+        using BackgroundTaskManager manager = new BackgroundTaskManager();
+        ClaudeCodeTool claude = new ClaudeCodeTool(new FakeConfirmationService(true), new ClaudeCodeOptions());
+        DelegateInBackgroundTool tool = new DelegateInBackgroundTool(new FakeConfirmationService(true), manager, claude);
 
         Assert.True(tool.RequiresConfirmation);
         Assert.Equal("delegar_em_background", tool.Name);

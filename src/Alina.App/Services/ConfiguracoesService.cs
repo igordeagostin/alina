@@ -59,7 +59,7 @@ public sealed class ConfiguracoesService
 
         try
         {
-            var dir = Path.GetDirectoryName(_arquivo);
+            string? dir = Path.GetDirectoryName(_arquivo);
             if (!string.IsNullOrWhiteSpace(dir))
             {
                 Directory.CreateDirectory(dir);
@@ -78,7 +78,7 @@ public sealed class ConfiguracoesService
         {
             if (File.Exists(_arquivo))
             {
-                var json = File.ReadAllText(_arquivo);
+                string json = File.ReadAllText(_arquivo);
                 Atual = JsonSerializer.Deserialize<ConfiguracoesApp>(json, JsonOptions) ?? new ConfiguracoesApp();
             }
         }

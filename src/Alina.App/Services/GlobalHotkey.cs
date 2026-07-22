@@ -34,7 +34,7 @@ public sealed class GlobalHotkey : IDisposable
         _source = HwndSource.FromHwnd(windowHandle);
         _source?.AddHook(WndProc);
 
-        var vk = (uint)KeyInterop.VirtualKeyFromKey(tecla);
+        uint vk = (uint)KeyInterop.VirtualKeyFromKey(tecla);
         _registrado = RegisterHotKey(_handle, IdHotkey, (uint)modificadores | ModNoRepeat, vk);
     }
 

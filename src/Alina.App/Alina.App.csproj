@@ -11,6 +11,7 @@
     <AssemblyName>Alina.App</AssemblyName>
     <UserSecretsId>alina-console</UserSecretsId>
     <ApplicationIcon>Assets\alina.ico</ApplicationIcon>
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

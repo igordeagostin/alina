@@ -1,3 +1,4 @@
+using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Models;
 using Alina.Core.Tools;
@@ -35,7 +36,7 @@ public sealed class FakeChatClient : IChatClient
     public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var list = messages.ToList();
+        List<ChatMessage> list = messages.ToList();
         LastMessages = list;
         LastOptions = options;
         return Task.FromResult(_handler(list, options));
@@ -65,7 +66,7 @@ public sealed class InMemoryConversationStore : IConversationStore
     }
 
     public Task<Conversation?> LoadAsync(string id, CancellationToken cancellationToken = default)
-        => Task.FromResult(_data.TryGetValue(id, out var c) ? c : null);
+        => Task.FromResult(_data.TryGetValue(id, out Conversation? c) ? c : null);
 
     public Task<IReadOnlyList<ConversationSummary>> ListAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<ConversationSummary>>(
@@ -98,7 +99,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore
 
     public Task<bool> UpdateAsync(MemoryItem item, CancellationToken cancellationToken = default)
     {
-        var index = _items.FindIndex(i => i.Id == item.Id);
+        int index = _items.FindIndex(i => i.Id == item.Id);
         if (index < 0)
         {
             return Task.FromResult(false);
@@ -110,4 +111,29 @@ public sealed class InMemoryMemoryStore : IMemoryStore
 
     public Task<bool> RemoveAsync(string id, CancellationToken cancellationToken = default)
         => Task.FromResult(_items.RemoveAll(i => i.Id == id) > 0);
+}
+
+/// <summary>Habilidades em memória para testes.</summary>
+public sealed class InMemoryHabilidadeStore : IHabilidadeStore
+{
+    private readonly Dictionary<string, Habilidade> _itens = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<IReadOnlyList<HabilidadeResumo>> ListarAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<HabilidadeResumo>>(
+            _itens.Values.Select(h => new HabilidadeResumo(h.Nome, h.Descricao)).ToList());
+
+    public Task<Habilidade?> ObterAsync(string nome, CancellationToken cancellationToken = default)
+        => Task.FromResult(_itens.TryGetValue(nome, out Habilidade? h) ? h : null);
+
+    public Task SalvarAsync(Habilidade habilidade, CancellationToken cancellationToken = default)
+    {
+        _itens[habilidade.Nome] = habilidade;
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> RemoverAsync(string nome, CancellationToken cancellationToken = default)
+        => Task.FromResult(_itens.Remove(nome));
+
+    public Task<bool> ExisteAsync(string nome, CancellationToken cancellationToken = default)
+        => Task.FromResult(_itens.ContainsKey(nome));
 }

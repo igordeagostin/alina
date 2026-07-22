@@ -35,7 +35,7 @@ public sealed class RememberTool : ToolBase
             return "Erro: nada para memorizar (conteúdo vazio).";
         }
 
-        var item = new MemoryItem
+        MemoryItem item = new MemoryItem
         {
             Kind = MemoryKind.Fact,
             Content = content,
@@ -45,7 +45,7 @@ public sealed class RememberTool : ToolBase
         };
 
         await _memory.AddAsync(item, cancellationToken);
-        var pin = pinned ? " (fixada)" : string.Empty;
+        string pin = pinned ? " (fixada)" : string.Empty;
         return $"Memorizado [{item.Id}]{pin}: {item.Content}";
     }
 }
@@ -79,7 +79,7 @@ public sealed class RememberProcedureTool : ToolBase
             return "Erro: informe o nome e os passos do procedimento.";
         }
 
-        var item = new MemoryItem
+        MemoryItem item = new MemoryItem
         {
             Kind = MemoryKind.Procedure,
             Title = name.Trim(),
@@ -119,7 +119,7 @@ public sealed class RetrieveMemoryTool : ToolBase
         IReadOnlyList<MemoryItem> items;
         if (!string.IsNullOrWhiteSpace(ids))
         {
-            var idList = MemoryToolHelpers.ParseKeywords(ids);
+            List<string> idList = MemoryToolHelpers.ParseKeywords(ids);
             items = await _retriever.GetByIdsAsync(idList, cancellationToken);
         }
         else if (!string.IsNullOrWhiteSpace(query))
@@ -136,11 +136,11 @@ public sealed class RetrieveMemoryTool : ToolBase
             return "Nenhuma memória encontrada.";
         }
 
-        var sb = new StringBuilder();
-        foreach (var item in items)
+        StringBuilder sb = new StringBuilder();
+        foreach (MemoryItem item in items)
         {
-            var kind = item.Kind == MemoryKind.Procedure ? "procedimento" : "fato";
-            var category = string.IsNullOrWhiteSpace(item.Category) ? string.Empty : $" ({item.Category})";
+            string kind = item.Kind == MemoryKind.Procedure ? "procedimento" : "fato";
+            string category = string.IsNullOrWhiteSpace(item.Category) ? string.Empty : $" ({item.Category})";
             sb.AppendLine($"[{item.Id}] {kind}{category} — {item.DisplayTitle()}");
             sb.AppendLine(item.Content);
             sb.AppendLine();
@@ -183,18 +183,18 @@ public sealed class RecallTool : ToolBase
     [Description("Retorna a lista de memórias salvas.")]
     public async Task<string> RunAsync(CancellationToken cancellationToken = default)
     {
-        var items = await _memory.GetAllAsync(cancellationToken);
+        IReadOnlyList<MemoryItem> items = await _memory.GetAllAsync(cancellationToken);
         if (items.Count == 0)
         {
             return "Nenhuma memória salva ainda.";
         }
 
-        var sb = new StringBuilder();
-        foreach (var item in items)
+        StringBuilder sb = new StringBuilder();
+        foreach (MemoryItem item in items)
         {
-            var category = string.IsNullOrWhiteSpace(item.Category) ? string.Empty : $" ({item.Category})";
-            var kind = item.Kind == MemoryKind.Procedure ? "⚙ " : string.Empty;
-            var pin = item.Pinned ? "📌 " : string.Empty;
+            string category = string.IsNullOrWhiteSpace(item.Category) ? string.Empty : $" ({item.Category})";
+            string kind = item.Kind == MemoryKind.Procedure ? "⚙ " : string.Empty;
+            string pin = item.Pinned ? "📌 " : string.Empty;
             sb.AppendLine($"[{item.Id}] {pin}{kind}{category} {item.DisplayTitle()}");
         }
 
@@ -227,7 +227,7 @@ public sealed class ForgetTool : ToolBase
             return "Erro: informe o id da memória a esquecer.";
         }
 
-        var removed = await _memory.RemoveAsync(id, cancellationToken);
+        bool removed = await _memory.RemoveAsync(id, cancellationToken);
         return removed ? $"Memória [{id}] esquecida." : $"Nenhuma memória com id [{id}] foi encontrada.";
     }
 }

@@ -10,6 +10,13 @@ public sealed class ClaudeCodeOptions
     public string Executable { get; set; } = "claude";
 
     /// <summary>
+    /// Modelo passado ao CLI (<c>--model</c>): um alias ("opus", "sonnet", "haiku") ou o
+    /// ID completo do modelo. Quando vazio, o Claude Code usa o modelo padrão da conta/config
+    /// do usuário.
+    /// </summary>
+    public string? Model { get; set; }
+
+    /// <summary>
     /// Modo de permissão passado ao CLI (--permission-mode):
     /// "default", "acceptEdits", "plan" ou "bypassPermissions".
     /// Como a própria Alina já pede confirmação antes de delegar, o default

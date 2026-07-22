@@ -67,7 +67,7 @@ public sealed class ConfiguracoesLlmService
             o.Model = _estado.Modelo!;
         }
 
-        var chave = DecifrarChave();
+        string? chave = DecifrarChave();
         if (!string.IsNullOrWhiteSpace(chave))
         {
             o.ApiKey = chave;
@@ -77,7 +77,7 @@ public sealed class ConfiguracoesLlmService
     /// <summary>Monta as opções efetivas (base do appsettings + preferências salvas).</summary>
     public LlmOptions MontarOpcoesEfetivas()
     {
-        var o = _config.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
+        LlmOptions o = _config.GetSection(LlmOptions.SectionName).Get<LlmOptions>() ?? new LlmOptions();
         AplicarEm(o);
         return o;
     }
@@ -118,7 +118,7 @@ public sealed class ConfiguracoesLlmService
     {
         try
         {
-            var dir = Path.GetDirectoryName(_arquivo);
+            string? dir = Path.GetDirectoryName(_arquivo);
             if (!string.IsNullOrWhiteSpace(dir))
             {
                 Directory.CreateDirectory(dir);
@@ -140,8 +140,8 @@ public sealed class ConfiguracoesLlmService
 
         try
         {
-            var cifrado = Convert.FromBase64String(_estado.ChaveProtegida!);
-            var claro = ProtectedData.Unprotect(cifrado, null, DataProtectionScope.CurrentUser);
+            byte[] cifrado = Convert.FromBase64String(_estado.ChaveProtegida!);
+            byte[] claro = ProtectedData.Unprotect(cifrado, null, DataProtectionScope.CurrentUser);
             return Encoding.UTF8.GetString(claro);
         }
         catch (Exception ex) when (ex is FormatException or CryptographicException)
@@ -152,7 +152,7 @@ public sealed class ConfiguracoesLlmService
 
     private static string Proteger(string valor)
     {
-        var cifrado = ProtectedData.Protect(Encoding.UTF8.GetBytes(valor), null, DataProtectionScope.CurrentUser);
+        byte[] cifrado = ProtectedData.Protect(Encoding.UTF8.GetBytes(valor), null, DataProtectionScope.CurrentUser);
         return Convert.ToBase64String(cifrado);
     }
 }

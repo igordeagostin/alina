@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.IO;
 using System.Windows;
 using System.Windows.Forms;
 
@@ -23,7 +24,7 @@ public sealed class TrayIconController : IDisposable
         _uiState = uiState;
         _aoSair = aoSair;
 
-        var menu = new ContextMenuStrip();
+        ContextMenuStrip menu = new ContextMenuStrip();
         menu.Items.Add("Mostrar / ocultar", null, (_, _) => AlternarJanela());
         menu.Items.Add("Alternar modo de tela", null, (_, _) => _uiState.Alternar());
 
@@ -73,8 +74,8 @@ public sealed class TrayIconController : IDisposable
 
     private static Icon CriarIcone()
     {
-        var uri = new Uri("pack://application:,,,/Assets/alina.ico");
-        using var stream = System.Windows.Application.GetResourceStream(uri)!.Stream;
+        Uri uri = new Uri("pack://application:,,,/Assets/alina.ico");
+        using Stream stream = System.Windows.Application.GetResourceStream(uri)!.Stream;
         return new Icon(stream, new System.Drawing.Size(32, 32));
     }
 
