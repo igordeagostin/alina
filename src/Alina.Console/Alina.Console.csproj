@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="plugins\**\*.plugin.json" CopyToOutputDirectory="PreserveNewest" LinkBase="plugins" />
   </ItemGroup>
 
 </Project>

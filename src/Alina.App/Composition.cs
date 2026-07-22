@@ -1,4 +1,5 @@
 using Alina.App.Services;
+using Alina.Core.Ferramentas;
 using Alina.Core.Habilidades;
 using Alina.Core.Orchestration;
 using Alina.Core.Permissoes;
@@ -10,10 +11,10 @@ using Alina.Mcp;
 using Alina.Tools;
 using Alina.Tools.Background;
 using Alina.Tools.ClaudeCode;
+using Alina.Tools.Ferramentas;
 using Alina.Tools.Git;
 using Alina.Tools.Habilidades;
 using Alina.Tools.Memory;
-using Alina.Tools.Plugins;
 using Alina.Voice;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -104,7 +105,6 @@ public static class Composition
         builder.Services.AddSingleton<ITool, TerminalTool>();
         builder.Services.AddSingleton<ITool, FileReadTool>();
         builder.Services.AddSingleton<ITool, ListarDiretorioTool>();
-        builder.Services.AddSingleton<ITool, AbrirNoVsCodeTool>();
 
         // Servidor de permissão (Opção A): pedidos de permissão do Claude Code em modo headless
         // aparecem como overlay na UI (com opções de escopo), em vez de serem bloqueados.
@@ -154,6 +154,15 @@ public static class Composition
                 sp.GetRequiredService<IChatClient>(),
                 sp.GetRequiredService<IPoliticaPermissao>()));
 
+        // Ferramentas declarativas: tools de criar/esquecer + gerador conversacional.
+        // O store e o provider vêm de AddAlina.
+        builder.Services.AddSingleton<ITool, CriarFerramentaTool>();
+        builder.Services.AddSingleton<ITool, EsquecerFerramentaTool>();
+        builder.Services.AddSingleton<IGeradorFerramenta>(sp =>
+            new GeradorFerramenta(
+                sp.GetRequiredService<IChatClient>(),
+                sp.GetRequiredService<IPoliticaPermissao>()));
+
         // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
         VoiceOptions voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();
         if (string.IsNullOrWhiteSpace(voiceOptions.CaminhoModeloVosk))
@@ -177,19 +186,6 @@ public static class Composition
         });
         builder.Services.AddSingleton<ISpeechToText, OpenAISpeechToText>();
         builder.Services.AddSingleton<ITextToSpeech, OpenAITextToSpeech>();
-
-        // Plugins declarativos (Fase 6)
-        string? pluginsDir = builder.Configuration.GetValue<string>("Plugins:Directory");
-        if (string.IsNullOrWhiteSpace(pluginsDir))
-        {
-            pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
-        }
-
-        PluginLoadResult pluginResult = PluginLoader.Load(pluginsDir, confirmation);
-        foreach (PluginTool pluginTool in pluginResult.Tools)
-        {
-            builder.Services.AddSingleton<ITool>(pluginTool);
-        }
 
         return builder.Build();
     }

@@ -1,4 +1,5 @@
 using Alina.Console;
+using Alina.Core.Ferramentas;
 using Alina.Core.Memory;
 using Alina.Core.Orchestration;
 using Alina.Core.Tools;
@@ -9,10 +10,10 @@ using Alina.Mcp;
 using Alina.Tools;
 using Alina.Tools.Background;
 using Alina.Tools.ClaudeCode;
+using Alina.Tools.Ferramentas;
 using Alina.Tools.Git;
 using Alina.Tools.Habilidades;
 using Alina.Tools.Memory;
-using Alina.Tools.Plugins;
 using Alina.Voice;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,7 +43,6 @@ builder.Services.AddSingleton<IConfirmationService>(confirmation);
 builder.Services.AddSingleton<ITool, TerminalTool>();
 builder.Services.AddSingleton<ITool, FileReadTool>();
 builder.Services.AddSingleton<ITool, ListarDiretorioTool>();
-builder.Services.AddSingleton<ITool, AbrirNoVsCodeTool>();
 
 // Confirmação de permissão com escopo (uma vez / sempre / sempre neste diretório),
 // roteada entre console e voz conforme o modo ativo.
@@ -90,6 +90,10 @@ builder.Services.AddSingleton<ITool, AprenderHabilidadeTool>();
 builder.Services.AddSingleton<ITool, UsarHabilidadeTool>();
 builder.Services.AddSingleton<ITool, EsquecerHabilidadeTool>();
 
+// Tools de ferramentas declarativas (criar/esquecer). O store e o provider vêm de AddAlina.
+builder.Services.AddSingleton<ITool, CriarFerramentaTool>();
+builder.Services.AddSingleton<ITool, EsquecerFerramentaTool>();
+
 // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
 VoiceOptions voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();
 builder.Services.AddSingleton(voiceOptions);
@@ -111,31 +115,10 @@ builder.Services.AddSingleton<ISpeechToText, OpenAISpeechToText>();
 builder.Services.AddSingleton<ITextToSpeech, OpenAITextToSpeech>();
 builder.Services.AddSingleton<VoiceChat>();
 
-// Plugins declarativos (Fase 6) — carregados de arquivos *.plugin.json
-string? pluginsDir = builder.Configuration.GetValue<string>("Plugins:Directory");
-if (string.IsNullOrWhiteSpace(pluginsDir))
-{
-    pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
-}
-
-PluginLoadResult pluginResult = PluginLoader.Load(pluginsDir, confirmation);
-foreach (PluginTool pluginTool in pluginResult.Tools)
-{
-    builder.Services.AddSingleton<ITool>(pluginTool);
-}
-
 using IHost host = builder.Build();
 
-if (pluginResult.Tools.Count > 0 || pluginResult.Warnings.Count > 0)
-{
-    WriteLineColored($"Plugins: {pluginResult.Tools.Count} carregado(s) de {pluginsDir}", ConsoleColor.DarkGray);
-    foreach (string warning in pluginResult.Warnings)
-    {
-        WriteLineColored($"  ⚠ plugin ignorado — {warning}", ConsoleColor.Yellow);
-    }
-}
-
 IConversationStore store = host.Services.GetRequiredService<IConversationStore>();
+IFerramentaStore ferramentas = host.Services.GetRequiredService<IFerramentaStore>();
 IMemoryStore memory = host.Services.GetRequiredService<IMemoryStore>();
 IBackgroundTaskManager tasks = host.Services.GetRequiredService<IBackgroundTaskManager>();
 
@@ -156,10 +139,10 @@ tasks.TaskFinished += (_, task) =>
 Lazy<IOrchestrator> orchestrator = new Lazy<IOrchestrator>(() => host.Services.GetRequiredService<IOrchestrator>());
 Lazy<VoiceChat> voiceChat = new Lazy<VoiceChat>(() => host.Services.GetRequiredService<VoiceChat>());
 
-await RunReplAsync(orchestrator, store, voiceChat, memory, pluginResult.Tools, tasks);
+await RunReplAsync(orchestrator, store, voiceChat, memory, ferramentas, tasks);
 return;
 
-static async Task RunReplAsync(Lazy<IOrchestrator> orchestrator, IConversationStore store, Lazy<VoiceChat> voiceChat, IMemoryStore memory, IReadOnlyList<PluginTool> plugins, IBackgroundTaskManager tasks)
+static async Task RunReplAsync(Lazy<IOrchestrator> orchestrator, IConversationStore store, Lazy<VoiceChat> voiceChat, IMemoryStore memory, IFerramentaStore ferramentas, IBackgroundTaskManager tasks)
 {
     PrintBanner();
 
@@ -236,8 +219,9 @@ static async Task RunReplAsync(Lazy<IOrchestrator> orchestrator, IConversationSt
                 }
                 continue;
 
-            case "/plugins":
-                PrintPlugins(plugins);
+            case "/ferramentas":
+            case "/tools":
+                await PrintFerramentasAsync(ferramentas);
                 continue;
 
             case "/tarefas":
@@ -377,19 +361,20 @@ static void PrintTaskDetail(IBackgroundTaskManager tasks, string id)
     }
 }
 
-static void PrintPlugins(IReadOnlyList<PluginTool> plugins)
+static async Task PrintFerramentasAsync(IFerramentaStore ferramentas)
 {
-    if (plugins.Count == 0)
+    IReadOnlyList<FerramentaResumo> lista = await ferramentas.ListarAsync();
+    if (lista.Count == 0)
     {
-        WriteLineColored("Nenhum plugin carregado. Adicione arquivos *.plugin.json na pasta de plugins.", ConsoleColor.DarkGray);
+        WriteLineColored("Nenhuma ferramenta declarativa. Peça à Alina para criar uma, ou adicione um *.tool.json na pasta de dados.", ConsoleColor.DarkGray);
         return;
     }
 
-    WriteLineColored("Plugins carregados:", ConsoleColor.DarkGray);
-    foreach (PluginTool plugin in plugins)
+    WriteLineColored("Ferramentas declarativas:", ConsoleColor.DarkGray);
+    foreach (FerramentaResumo f in lista)
     {
-        string flag = plugin.RequiresConfirmation ? " (confirmação)" : string.Empty;
-        WriteLineColored($"  {plugin.Name}{flag} — {plugin.Description}", ConsoleColor.DarkGray);
+        string flag = f.ExigeConfirmacao ? " (confirmação)" : string.Empty;
+        WriteLineColored($"  {f.Nome}{flag} — {f.Descricao}", ConsoleColor.DarkGray);
     }
 }
 
@@ -403,7 +388,7 @@ static void PrintBanner()
 
 static void PrintHelp()
 {
-    WriteLineColored("Comandos: /voz  /lembrar  /memorias  /plugins  /tarefas  /nova  /historico  /ajuda  /sair", ConsoleColor.DarkGray);
+    WriteLineColored("Comandos: /voz  /lembrar  /memorias  /ferramentas  /tarefas  /nova  /historico  /ajuda  /sair", ConsoleColor.DarkGray);
 }
 
 static void EscreverProgressoClaudeCode(EventoProgressoClaudeCode e)

@@ -1039,6 +1039,30 @@ html, body {
     gap: 8px;
 }
 
+/* ---- Ferramentas: editor/pré-visualização JSON ---- */
+.ferr-json-preview {
+    margin: 0;
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.ferr-json-editor {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.ferr-erro {
+    display: block;
+    color: var(--danger, #e5484d);
+    font-size: 0.75rem;
+    margin-top: 4px;
+}
+
 /* ---- Habilidades: alternador editar/pré-visualizar ---- */
 .hab-abas {
     display: flex;

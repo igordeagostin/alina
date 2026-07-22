@@ -31,6 +31,8 @@ public sealed class StorageOptions
 
     public string ResolveHabilidadesDirectory() => Path.Combine(ResolveDataDirectory(), "habilidades");
 
+    public string ResolveFerramentasDirectory() => Path.Combine(ResolveDataDirectory(), "ferramentas");
+
     public string ResolvePreferencesFile() =>
         string.IsNullOrWhiteSpace(PreferencesFile)
             ? Path.Combine(ResolveDataDirectory(), "preferences.md")

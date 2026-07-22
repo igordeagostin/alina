@@ -45,7 +45,7 @@ public sealed class AssistantStatusTests
         AssistantState? duranteExecucao = null;
 
         SondaTool tool = new SondaTool(() => duranteExecucao = status.Current);
-        ToolRegistry registry = new ToolRegistry(new ITool[] { tool }, status);
+        ToolRegistry registry = new ToolRegistry(new ITool[] { tool }, status: status);
 
         status.Set(AssistantState.Thinking);
         AIFunction funcao = (AIFunction)registry.AsAIFunctions()[0];

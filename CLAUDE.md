@@ -2,7 +2,7 @@
 
 Assistente pessoal de desenvolvimento estilo "Jarvis" em .NET 10. Orquestra um LLM
 (OpenAI por padrão, via `Microsoft.Extensions.AI`/`IChatClient`) com function-calling,
-memória permanente, voz push-to-talk, plugins declarativos e execução em background.
+memória permanente, voz push-to-talk, ferramentas declarativas e execução em background.
 
 ## Idioma
 
@@ -38,7 +38,7 @@ memória permanente, voz push-to-talk, plugins declarativos e execução em back
 Alina.slnx
   src/
     Alina.Core            # Orquestrador, Models, Memory (abstrações), ITool
-    Alina.Tools           # Tools: Terminal, FileRead, ClaudeCode, Git, Memory, Plugins, Background
+    Alina.Tools           # Tools: Terminal, FileRead, ClaudeCode, Git, Memory, Ferramentas, Background
     Alina.Voice           # STT (Whisper), TTS, áudio via NAudio, palavra de ativação (Vosk)
     Alina.Infrastructure  # IChatClient, configuração, stores JSON
     Alina.Console         # UI de console (REPL + confirmação)

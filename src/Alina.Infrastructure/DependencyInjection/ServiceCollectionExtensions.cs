@@ -1,9 +1,11 @@
+using Alina.Core.Ferramentas;
 using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Orchestration;
 using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Alina.Infrastructure.Configuration;
+using Alina.Infrastructure.Ferramentas;
 using Alina.Infrastructure.Habilidades;
 using Alina.Infrastructure.Llm;
 using Alina.Infrastructure.Memory;
@@ -40,6 +42,17 @@ public static class ServiceCollectionExtensions
         // system prompt, conteúdo completo sob demanda).
         services.AddSingleton<IHabilidadeStore>(sp =>
             new FileHabilidadeStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
+
+        // Ferramentas declarativas: cada uma um arquivo *.tool.json na pasta de dados do
+        // usuário. O provider consulta o store a cada turno (hot-reload) e o ToolRegistry
+        // combina essas ferramentas com as tools em C#.
+        services.AddSingleton<IFerramentaStore>(sp =>
+            new FileFerramentaStore(sp.GetRequiredService<IOptions<StorageOptions>>().Value));
+        services.AddSingleton<IFerramentaProvider>(sp =>
+            new FerramentaProvider(
+                sp.GetRequiredService<IFerramentaStore>(),
+                sp.GetRequiredService<IConfirmationService>(),
+                sp.GetRequiredService<IOptions<StorageOptions>>().Value));
 
         // Política de permissões: decide o que liberar/perguntar antes de interromper o usuário.
         services.AddSingleton<IPoliticaPermissao>(sp =>
