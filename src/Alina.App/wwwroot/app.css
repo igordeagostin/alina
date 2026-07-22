@@ -610,11 +610,34 @@ html, body {
 
 .cfg-corpo {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 14px;
+}
+
+.cfg-corpo::-webkit-scrollbar {
+    width: 10px;
+}
+
+.cfg-corpo::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.cfg-corpo::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+}
+
+.cfg-corpo::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-strong);
+    background-clip: padding-box;
 }
 
 .cfg-rodape {
