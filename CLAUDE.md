@@ -20,6 +20,8 @@ memória permanente, voz push-to-talk, plugins declarativos e execução em back
   concisas. Um arquivo por tipo, namespace file-scoped.
 - **Nunca use `var`.** Sempre declare o tipo explícito, mesmo quando ele for aparente pelo
   lado direito da atribuição. A regra é reforçada pelo `.editorconfig` (IDE0008 como erro).
+- **Classes CSS separadas por traço.** Use `-` como separador em nomes de classe
+  (ex.: `.cfg-abas`, `.config-grupo`). Não use duplo underscore estilo BEM (`.cfg__abas`).
 
 ## Segredos e chaves de API
 

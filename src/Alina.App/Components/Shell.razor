@@ -24,9 +24,9 @@
 @implements IDisposable
 
 <div class="shell @(UiState.Compacto ? "shell--compacto" : "shell--detalhado") shell--@Status.Current.ToString().ToLowerInvariant()">
-    <div class="shell__header">
-        <img class="shell__logo" src="logo.svg" alt="Alina" />
-        <div class="shell__title">Alina</div>
+    <div class="shell-header">
+        <img class="shell-logo" src="logo.svg" alt="Alina" />
+        <div class="shell-title">Alina</div>
         <button class="modo-toggle" @onclick="AlternarModo" title="@(UiState.Compacto ? "Modo detalhado" : "Modo compacto")">
             @(UiState.Compacto ? "Detalhes" : "Compactar")
         </button>
@@ -35,17 +35,17 @@
 
     <div class="voz">
         <div class="orb-area">
-            <span class="orb__aura"></span>
+            <span class="orb-aura"></span>
             <button class="orb orb--principal" @onclick="AlternarEscutaAsync" disabled="@Ocupado" title="@RotuloMicrofone">
-                <span class="orb__pulso"></span>
+                <span class="orb-pulso"></span>
             </button>
         </div>
         <canvas id="waveform" class="waveform"></canvas>
-        <div class="voz__estado">@TextoEstado</div>
-        <div class="voz__dica">@DicaEstado</div>
+        <div class="voz-estado">@TextoEstado</div>
+        <div class="voz-dica">@DicaEstado</div>
     </div>
 
-    <div class="shell__log">
+    <div class="shell-log">
         @foreach (var m in Log.Snapshot())
         {
             <div class="msg msg--@m.Tipo">@m.Texto</div>
@@ -56,14 +56,14 @@
         }
     </div>
 
-    <div class="shell__composer">
-        <input class="shell__input"
+    <div class="shell-composer">
+        <input class="shell-input"
                placeholder="Ou digite aqui…"
                @bind="_input"
                @bind:event="oninput"
                @onkeydown="OnKeyDown"
                disabled="@Ocupado" />
-        <button class="shell__send" @onclick="EnviarTextoAsync" disabled="@(Ocupado || string.IsNullOrWhiteSpace(_input))">
+        <button class="shell-send" @onclick="EnviarTextoAsync" disabled="@(Ocupado || string.IsNullOrWhiteSpace(_input))">
             Enviar
         </button>
     </div>
@@ -71,41 +71,41 @@
     @if (_configAberta)
     {
         <div class="cfg">
-            <div class="cfg__topo">
-                <button class="cfg__voltar" @onclick="FecharConfiguracoes" title="Voltar">←</button>
-                <div class="cfg__titulo">Configurações</div>
+            <div class="cfg-topo">
+                <button class="cfg-voltar" @onclick="FecharConfiguracoes" title="Voltar">←</button>
+                <div class="cfg-titulo">Configurações</div>
             </div>
 
-            <div class="cfg__abas">
-                <button class="cfg__aba @(_aba == AbaConfig.Geral ? "cfg__aba--ativa" : "")"
+            <div class="cfg-abas">
+                <button class="cfg-aba @(_aba == AbaConfig.Geral ? "cfg-aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Geral">Geral</button>
-                <button class="cfg__aba @(_aba == AbaConfig.Aparencia ? "cfg__aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Aparencia ? "cfg-aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Aparencia">Aparência</button>
-                <button class="cfg__aba @(_aba == AbaConfig.IA ? "cfg__aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.IA ? "cfg-aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.IA">IA</button>
-                <button class="cfg__aba @(_aba == AbaConfig.Voz ? "cfg__aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Voz ? "cfg-aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Voz">Voz</button>
-                <button class="cfg__aba @(_aba == AbaConfig.Permissoes ? "cfg__aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Permissoes ? "cfg-aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Permissoes">Permissões</button>
-                <button class="cfg__aba @(_aba == AbaConfig.Habilidades ? "cfg__aba--ativa" : "")"
+                <button class="cfg-aba @(_aba == AbaConfig.Habilidades ? "cfg-aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Habilidades">Habilidades</button>
             </div>
 
-            <div class="cfg__corpo">
+            <div class="cfg-corpo">
                 @if (_aba == AbaConfig.Geral)
                 {
                     <div class="cfg-card">
                         <label class="cfg-row">
-                            <div class="cfg-row__texto">
-                                <span class="cfg-row__titulo">Iniciar com o Windows</span>
-                                <span class="cfg-row__sub">Abre a Alina automaticamente ao ligar o computador</span>
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Iniciar com o Windows</span>
+                                <span class="cfg-row-sub">Abre a Alina automaticamente ao ligar o computador</span>
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_iniciarComWindows" />
                         </label>
                         <label class="cfg-row">
-                            <div class="cfg-row__texto">
-                                <span class="cfg-row__titulo">Abrir em modo compacto</span>
-                                <span class="cfg-row__sub">Mostra só o orbe de voz ao iniciar</span>
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Abrir em modo compacto</span>
+                                <span class="cfg-row-sub">Mostra só o orbe de voz ao iniciar</span>
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.AbrirEmModoCompacto" />
                         </label>
@@ -116,14 +116,14 @@
                 {
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row__cabecalho">
-                                <span class="cfg-row__titulo">Tamanho do texto</span>
-                                <span class="cfg-row__valor">@((_edicao.EscalaInterface * 100).ToString("0"))%</span>
+                            <div class="cfg-row-cabecalho">
+                                <span class="cfg-row-titulo">Tamanho do texto</span>
+                                <span class="cfg-row-valor">@((_edicao.EscalaInterface * 100).ToString("0"))%</span>
                             </div>
                             <input type="range" class="cfg-range" min="0.8" max="1.4" step="0.05"
                                    value="@_edicao.EscalaInterface.ToString(CultureInfo.InvariantCulture)"
                                    @oninput="AoMudarEscalaAsync" />
-                            <span class="cfg-row__sub">Aumenta ou diminui o texto de toda a interface. Ajuste conforme a sua distância da tela — a mudança aparece na hora.</span>
+                            <span class="cfg-row-sub">Aumenta ou diminui o texto de toda a interface. Ajuste conforme a sua distância da tela — a mudança aparece na hora.</span>
                         </div>
                     </div>
                 }
@@ -132,36 +132,36 @@
                 {
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <span class="cfg-row__titulo">Modelo do cérebro</span>
+                            <span class="cfg-row-titulo">Modelo do cérebro</span>
                             <select class="cfg-campo" @bind="_modeloLlm">
                                 @foreach (var m in ConfigLlm.ModelosDisponiveis)
                                 {
                                     <option value="@m.Id">@m.Rotulo — @m.Custo</option>
                                 }
                             </select>
-                            <span class="cfg-row__sub">Modelos mais avançados conversam melhor, porém custam mais por uso. O trabalho pesado de código continua indo para o Claude Code (sua assinatura).</span>
+                            <span class="cfg-row-sub">Modelos mais avançados conversam melhor, porém custam mais por uso. O trabalho pesado de código continua indo para o Claude Code (sua assinatura).</span>
                         </div>
                     </div>
 
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <span class="cfg-row__titulo">Modelo do Claude Code</span>
+                            <span class="cfg-row-titulo">Modelo do Claude Code</span>
                             <select class="cfg-campo" @bind="_modeloClaudeCode">
                                 @foreach (var m in ConfigClaudeCode.ModelosDisponiveis)
                                 {
                                     <option value="@m.Id">@m.Rotulo@(string.IsNullOrEmpty(m.Nota) ? "" : $" — {m.Nota}")</option>
                                 }
                             </select>
-                            <span class="cfg-row__sub">Modelo que o Claude Code usa nas tarefas de código (via sua assinatura). "Padrão da assinatura" deixa o próprio Claude Code decidir.</span>
+                            <span class="cfg-row-sub">Modelo que o Claude Code usa nas tarefas de código (via sua assinatura). "Padrão da assinatura" deixa o próprio Claude Code decidir.</span>
                         </div>
                     </div>
 
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <span class="cfg-row__titulo">Chave da API OpenAI</span>
+                            <span class="cfg-row-titulo">Chave da API OpenAI</span>
                             <input type="password" class="cfg-campo" @bind="_chaveLlm"
                                    placeholder="@(ConfigLlm.ChaveDefinida ? "•••••••• (definida — deixe em branco para manter)" : "sk-…")" />
-                            <span class="cfg-row__sub">Guardada só neste computador, criptografada para o seu usuário do Windows — nunca é versionada nem enviada a lugar nenhum. Usada pelo cérebro (OpenAI) e pela voz.</span>
+                            <span class="cfg-row-sub">Guardada só neste computador, criptografada para o seu usuário do Windows — nunca é versionada nem enviada a lugar nenhum. Usada pelo cérebro (OpenAI) e pela voz.</span>
                         </div>
                     </div>
                 }
@@ -170,16 +170,16 @@
                 {
                     <div class="cfg-card">
                         <label class="cfg-row">
-                            <div class="cfg-row__texto">
-                                <span class="cfg-row__titulo">Falar as respostas</span>
-                                <span class="cfg-row__sub">A Alina lê em voz alta o que responde</span>
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Falar as respostas</span>
+                                <span class="cfg-row-sub">A Alina lê em voz alta o que responde</span>
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.FalarRespostas" />
                         </label>
                         <label class="cfg-row">
-                            <div class="cfg-row__texto">
-                                <span class="cfg-row__titulo">Atender quando eu chamar "Alina"</span>
-                                <span class="cfg-row__sub">Escuta a palavra de ativação em segundo plano</span>
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Atender quando eu chamar "Alina"</span>
+                                <span class="cfg-row-sub">Escuta a palavra de ativação em segundo plano</span>
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.EscutarPalavraAtivacao" disabled="@(!Config.PalavraAtivacaoDisponivel)" />
                         </label>
@@ -187,10 +187,10 @@
                         {
                             <div class="cfg-ajuda">
                                 <div>Para atender pelo nome, baixe o modelo pequeno de português (Vosk) e extraia de modo que os arquivos fiquem em:</div>
-                                <code class="config__ajuda-caminho">@Config.CaminhoModeloVosk</code>
-                                <div class="config__ajuda-acoes">
-                                    <button class="config__link" @onclick="AbrirSiteVosk">Baixar modelo</button>
-                                    <button class="config__link" @onclick="AbrirPastaModelo">Abrir pasta</button>
+                                <code class="config-ajuda-caminho">@Config.CaminhoModeloVosk</code>
+                                <div class="config-ajuda-acoes">
+                                    <button class="config-link" @onclick="AbrirSiteVosk">Baixar modelo</button>
+                                    <button class="config-link" @onclick="AbrirPastaModelo">Abrir pasta</button>
                                 </div>
                             </div>
                         }
@@ -198,7 +198,7 @@
 
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <span class="cfg-row__titulo">Voz da Alina</span>
+                            <span class="cfg-row-titulo">Voz da Alina</span>
                             <div class="cfg-voz">
                                 <select class="cfg-campo" @bind="_edicao.Voz">
                                     @foreach (var v in Config.VozesDisponiveis)
@@ -206,16 +206,16 @@
                                         <option value="@v">@v</option>
                                     }
                                 </select>
-                                <button class="cfg-voz__ouvir" @onclick="OuvirVozAsync" disabled="@Ocupado"
+                                <button class="cfg-voz-ouvir" @onclick="OuvirVozAsync" disabled="@Ocupado"
                                         title="Ouvir uma amostra desta voz">
                                     @(Status.Current == AssistantState.Speaking ? "♪ Tocando…" : "▶ Ouvir")
                                 </button>
                             </div>
                         </div>
                         <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row__cabecalho">
-                                <span class="cfg-row__titulo">Velocidade da fala</span>
-                                <span class="cfg-row__valor">@_edicao.VelocidadeFala.ToString("0.0")×</span>
+                            <div class="cfg-row-cabecalho">
+                                <span class="cfg-row-titulo">Velocidade da fala</span>
+                                <span class="cfg-row-valor">@_edicao.VelocidadeFala.ToString("0.0")×</span>
                             </div>
                             <input type="range" class="cfg-range" min="0.5" max="2" step="0.1"
                                    @bind="_edicao.VelocidadeFala" @bind:event="oninput" @bind:culture="CultureInfo.InvariantCulture" />
@@ -224,32 +224,32 @@
 
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row__cabecalho">
-                                <span class="cfg-row__titulo">Encerrar após silêncio</span>
-                                <span class="cfg-row__valor">@_edicao.SegundosSilencioParaEncerrar.ToString("0.0")s</span>
+                            <div class="cfg-row-cabecalho">
+                                <span class="cfg-row-titulo">Encerrar após silêncio</span>
+                                <span class="cfg-row-valor">@_edicao.SegundosSilencioParaEncerrar.ToString("0.0")s</span>
                             </div>
                             <input type="range" class="cfg-range" min="0.8" max="3" step="0.1"
                                    @bind="_edicao.SegundosSilencioParaEncerrar" @bind:event="oninput" @bind:culture="CultureInfo.InvariantCulture" />
-                            <span class="cfg-row__sub">Quando você para de falar, a Alina processa sozinha após esse tempo de silêncio</span>
+                            <span class="cfg-row-sub">Quando você para de falar, a Alina processa sozinha após esse tempo de silêncio</span>
                         </div>
                     </div>
 
                     <div class="cfg-card">
                         <label class="cfg-row">
-                            <div class="cfg-row__texto">
-                                <span class="cfg-row__titulo">Conversa contínua</span>
-                                <span class="cfg-row__sub">Depois de responder, volta a ouvir sozinha — sem repetir "Alina" a cada frase</span>
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Conversa contínua</span>
+                                <span class="cfg-row-sub">Depois de responder, volta a ouvir sozinha — sem repetir "Alina" a cada frase</span>
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.ConversaContinua" />
                         </label>
                         <div class="cfg-row cfg-row--empilhado">
-                            <div class="cfg-row__cabecalho">
-                                <span class="cfg-row__titulo">Janela da conversa</span>
-                                <span class="cfg-row__valor">@_edicao.SegundosJanelaConversa.ToString("0")s</span>
+                            <div class="cfg-row-cabecalho">
+                                <span class="cfg-row-titulo">Janela da conversa</span>
+                                <span class="cfg-row-valor">@_edicao.SegundosJanelaConversa.ToString("0")s</span>
                             </div>
                             <input type="range" class="cfg-range" min="5" max="30" step="1"
                                    @bind="_edicao.SegundosJanelaConversa" @bind:event="oninput" />
-                            <span class="cfg-row__sub">Quanto tempo ela segue ouvindo antes de dormir e voltar a exigir o nome</span>
+                            <span class="cfg-row-sub">Quanto tempo ela segue ouvindo antes de dormir e voltar a exigir o nome</span>
                         </div>
                     </div>
                 }
@@ -258,7 +258,7 @@
                 {
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <span class="cfg-row__titulo">Quando não houver regra</span>
+                            <span class="cfg-row-titulo">Quando não houver regra</span>
                             <select class="cfg-campo" @bind="_permOpcoes.ModoPadrao">
                                 <option value="@ModoPermissao.Perguntar">Perguntar o que não for coberto</option>
                                 <option value="@ModoPermissao.AutoLeitura">Auto-permitir leitura</option>
@@ -267,28 +267,28 @@
                             </select>
                         </div>
                         <label class="cfg-row">
-                            <div class="cfg-row__texto">
-                                <span class="cfg-row__titulo">Confirmar fora dos diretórios confiáveis</span>
-                                <span class="cfg-row__sub">Pede confirmação para ações fora do workspace</span>
+                            <div class="cfg-row-texto">
+                                <span class="cfg-row-titulo">Confirmar fora dos diretórios confiáveis</span>
+                                <span class="cfg-row-sub">Pede confirmação para ações fora do workspace</span>
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_permOpcoes.ConfirmarForaDoWorkspace" />
                         </label>
                     </div>
 
-                    <div class="config__grupo">
-                        <span class="config__grupo-titulo">Diretórios confiáveis (permissão total)</span>
+                    <div class="config-grupo">
+                        <span class="config-grupo-titulo">Diretórios confiáveis (permissão total)</span>
                         @foreach (var d in _permOpcoes.DiretoriosConfiaveis.ToList())
                         {
-                            <div class="config__item">
-                                <code class="config__item-texto">@d</code>
-                                <button class="config__link" @onclick="() => RemoverDiretorio(d)">remover</button>
+                            <div class="config-item">
+                                <code class="config-item-texto">@d</code>
+                                <button class="config-link" @onclick="() => RemoverDiretorio(d)">remover</button>
                             </div>
                         }
-                        <div class="config__item">
-                            <input class="config__campo" @bind="_novoDiretorio" placeholder="D:\meus-projetos\alina" />
-                            <button class="config__link" @onclick="AdicionarDiretorio">adicionar</button>
+                        <div class="config-item">
+                            <input class="config-campo" @bind="_novoDiretorio" placeholder="D:\meus-projetos\alina" />
+                            <button class="config-link" @onclick="AdicionarDiretorio">adicionar</button>
                         </div>
-                        <button class="config__confiar" @onclick="ConfiarNesteProjeto">📁 Confiar num projeto…</button>
+                        <button class="config-confiar" @onclick="ConfiarNesteProjeto">📁 Confiar num projeto…</button>
                     </div>
 
                     <ListaEditavel Titulo="Comandos liberados (por prefixo)"
@@ -305,13 +305,13 @@
 
                     @if (Politica.Regras.Count > 0)
                     {
-                        <div class="config__grupo">
-                            <span class="config__grupo-titulo">Regras aprendidas</span>
+                        <div class="config-grupo">
+                            <span class="config-grupo-titulo">Regras aprendidas</span>
                             @foreach (var r in Politica.Regras)
                             {
-                                <div class="config__item">
-                                    <code class="config__item-texto">@(r.Permitir ? "✓" : "✕") @(r.Rotulo ?? r.Ferramenta)</code>
-                                    <button class="config__link" @onclick="() => RemoverRegra(r.Id)">remover</button>
+                                <div class="config-item">
+                                    <code class="config-item-texto">@(r.Permitir ? "✓" : "✕") @(r.Rotulo ?? r.Ferramenta)</code>
+                                    <button class="config-link" @onclick="() => RemoverRegra(r.Id)">remover</button>
                                 </div>
                             }
                         </div>
@@ -322,40 +322,40 @@
                 {
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row--empilhado">
-                            <span class="cfg-row__titulo">Habilidades aprendidas</span>
-                            <span class="cfg-row__sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Alterações aqui são gravadas na hora.</span>
+                            <span class="cfg-row-titulo">Habilidades aprendidas</span>
+                            <span class="cfg-row-sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Alterações aqui são gravadas na hora.</span>
                         </div>
                     </div>
 
-                    <div class="config__grupo">
+                    <div class="config-grupo">
                         @if (_habilidades.Count == 0)
                         {
-                            <span class="cfg-row__sub">Nenhuma habilidade ainda. Peça à Alina para aprender uma, ou crie abaixo.</span>
+                            <span class="cfg-row-sub">Nenhuma habilidade ainda. Peça à Alina para aprender uma, ou crie abaixo.</span>
                         }
                         @foreach (var h in _habilidades)
                         {
-                            <div class="config__item">
-                                <div class="config__item-texto">
-                                    <strong class="hab__nome">@h.Nome</strong>
-                                    <span class="hab__descricao">@h.Descricao</span>
+                            <div class="config-item">
+                                <div class="config-item-texto">
+                                    <strong class="hab-nome">@h.Nome</strong>
+                                    <span class="hab-descricao">@h.Descricao</span>
                                 </div>
-                                <button class="config__link" @onclick="() => VisualizarHabilidadeAsync(h.Nome)">visualizar</button>
-                                <button class="config__link" @onclick="() => EditarHabilidadeAsync(h.Nome)">editar</button>
-                                <button class="config__link" @onclick="() => RemoverHabilidadeAsync(h.Nome)">remover</button>
+                                <button class="config-link" @onclick="() => VisualizarHabilidadeAsync(h.Nome)">visualizar</button>
+                                <button class="config-link" @onclick="() => EditarHabilidadeAsync(h.Nome)">editar</button>
+                                <button class="config-link" @onclick="() => RemoverHabilidadeAsync(h.Nome)">remover</button>
                             </div>
                         }
                         @if (!_criandoHab && !_editandoHabilidade)
                         {
-                            <button class="config__confiar" @onclick="IniciarCriacaoHab">＋ Nova habilidade</button>
+                            <button class="config-confiar" @onclick="IniciarCriacaoHab">＋ Nova habilidade</button>
                         }
                     </div>
 
                     @if (_habVisualizando is not null)
                     {
-                        <div class="config__grupo">
-                            <div class="cfg-row__cabecalho">
-                                <span class="config__grupo-titulo">@_habVisualizando.Nome</span>
-                                <button class="config__link" @onclick="FecharVisualizacao">fechar</button>
+                        <div class="config-grupo">
+                            <div class="cfg-row-cabecalho">
+                                <span class="config-grupo-titulo">@_habVisualizando.Nome</span>
+                                <button class="config-link" @onclick="FecharVisualizacao">fechar</button>
                             </div>
                             <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_habVisualizando.Conteudo)))</div>
                         </div>
@@ -363,13 +363,13 @@
 
                     @if (_criandoHab)
                     {
-                        <div class="config__grupo">
-                            <span class="config__grupo-titulo">Nova habilidade — converse com a Alina</span>
+                        <div class="config-grupo">
+                            <span class="config-grupo-titulo">Nova habilidade — converse com a Alina</span>
                             <div class="hab-chat">
-                                <div class="hab-chat__log">
+                                <div class="hab-chat-log">
                                     @if (_historicoHab.Count == 0)
                                     {
-                                        <span class="hab-chat__vazio">Descreva o que você quer que a Alina aprenda — por exemplo, "como eu faço o deploy da API do Diário". Ela pergunta o que faltar e monta o documento.</span>
+                                        <span class="hab-chat-vazio">Descreva o que você quer que a Alina aprenda — por exemplo, "como eu faço o deploy da API do Diário". Ela pergunta o que faltar e monta o documento.</span>
                                     }
                                     @foreach (var m in _historicoHab)
                                     {
@@ -384,24 +384,24 @@
                                 @if (_rascunhoHab is not null)
                                 {
                                     <div class="hab-rascunho">
-                                        <span class="hab-rascunho__titulo">Rascunho: @_rascunhoHab.Titulo</span>
-                                        <span class="hab__descricao">@_rascunhoHab.Descricao</span>
+                                        <span class="hab-rascunho-titulo">Rascunho: @_rascunhoHab.Titulo</span>
+                                        <span class="hab-descricao">@_rascunhoHab.Descricao</span>
                                         <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_rascunhoHab.Conteudo)))</div>
-                                        <div class="hab-rascunho__acoes">
-                                            <button class="cfg__salvar" @onclick="AprovarRascunho">Aprovar e editar</button>
+                                        <div class="hab-rascunho-acoes">
+                                            <button class="cfg-salvar" @onclick="AprovarRascunho">Aprovar e editar</button>
                                         </div>
                                     </div>
                                 }
 
-                                <div class="hab-chat__composer">
-                                    <textarea class="config__campo hab-chat__campo" @bind="_inputHab" @bind:event="oninput"
+                                <div class="hab-chat-composer">
+                                    <textarea class="config-campo hab-chat-campo" @bind="_inputHab" @bind:event="oninput"
                                               placeholder="Digite sua mensagem…" disabled="@_gerandoHab"></textarea>
-                                    <button class="cfg__salvar" @onclick="EnviarMensagemHabAsync"
+                                    <button class="cfg-salvar" @onclick="EnviarMensagemHabAsync"
                                             disabled="@(_gerandoHab || string.IsNullOrWhiteSpace(_inputHab))">Enviar</button>
                                 </div>
-                                <div class="config__item config__item--acoes">
-                                    <button class="config__link" @onclick="PreencherManualmente">preencher manualmente</button>
-                                    <button class="cfg__cancelar" @onclick="CancelarCriacaoHab">Cancelar</button>
+                                <div class="config-item config-item--acoes">
+                                    <button class="config-link" @onclick="PreencherManualmente">preencher manualmente</button>
+                                    <button class="cfg-cancelar" @onclick="CancelarCriacaoHab">Cancelar</button>
                                 </div>
                             </div>
                         </div>
@@ -409,14 +409,14 @@
 
                     @if (_editandoHabilidade)
                     {
-                        <div class="config__grupo">
-                            <span class="config__grupo-titulo">@(_habEhNova ? "Nova habilidade" : $"Editando: {_habNomeOriginal}")</span>
-                            <input class="config__campo" @bind="_habTitulo" placeholder="Título (ex: Deploy da API do Diário)" />
-                            <input class="config__campo" @bind="_habDescricao" placeholder="Descrição de uma linha" />
+                        <div class="config-grupo">
+                            <span class="config-grupo-titulo">@(_habEhNova ? "Nova habilidade" : $"Editando: {_habNomeOriginal}")</span>
+                            <input class="config-campo" @bind="_habTitulo" placeholder="Título (ex: Deploy da API do Diário)" />
+                            <input class="config-campo" @bind="_habDescricao" placeholder="Descrição de uma linha" />
                             <div class="hab-abas">
-                                <button class="hab-abas__aba @(!_habPreview ? "hab-abas__aba--ativa" : string.Empty)"
+                                <button class="hab-abas-aba @(!_habPreview ? "hab-abas-aba--ativa" : string.Empty)"
                                         @onclick="() => _habPreview = false">Editar</button>
-                                <button class="hab-abas__aba @(_habPreview ? "hab-abas__aba--ativa" : string.Empty)"
+                                <button class="hab-abas-aba @(_habPreview ? "hab-abas-aba--ativa" : string.Empty)"
                                         @onclick="() => _habPreview = true">Pré-visualizar</button>
                             </div>
                             @if (_habPreview)
@@ -428,9 +428,9 @@
                                 <textarea class="cfg-textarea" @bind="_habConteudo" rows="10"
                                           placeholder="Instruções da habilidade, em Markdown…"></textarea>
                             }
-                            <div class="config__item config__item--acoes">
-                                <button class="cfg__cancelar" @onclick="() => _editandoHabilidade = false">Cancelar</button>
-                                <button class="cfg__salvar" @onclick="SalvarHabilidadeAsync"
+                            <div class="config-item config-item--acoes">
+                                <button class="cfg-cancelar" @onclick="() => _editandoHabilidade = false">Cancelar</button>
+                                <button class="cfg-salvar" @onclick="SalvarHabilidadeAsync"
                                         disabled="@(string.IsNullOrWhiteSpace(_habTitulo) || string.IsNullOrWhiteSpace(_habConteudo))">
                                     Salvar habilidade
                                 </button>
@@ -440,9 +440,9 @@
                 }
             </div>
 
-            <div class="cfg__rodape">
-                <button class="cfg__cancelar" @onclick="FecharConfiguracoes">Cancelar</button>
-                <button class="cfg__salvar" @onclick="SalvarConfiguracoes">Salvar alterações</button>
+            <div class="cfg-rodape">
+                <button class="cfg-cancelar" @onclick="FecharConfiguracoes">Cancelar</button>
+                <button class="cfg-salvar" @onclick="SalvarConfiguracoes">Salvar alterações</button>
             </div>
         </div>
     }
@@ -450,16 +450,16 @@
     @if (_confirmacaoPendente is not null)
     {
         <div class="confirm">
-            <div class="confirm__caixa">
-                <div class="confirm__titulo">Confirmar ação</div>
-                <div class="confirm__acao">@_confirmacaoPendente.Action</div>
+            <div class="confirm-caixa">
+                <div class="confirm-titulo">Confirmar ação</div>
+                <div class="confirm-acao">@_confirmacaoPendente.Action</div>
                 @if (!string.IsNullOrWhiteSpace(_confirmacaoPendente.Details))
                 {
-                    <pre class="confirm__detalhe">@_confirmacaoPendente.Details</pre>
+                    <pre class="confirm-detalhe">@_confirmacaoPendente.Details</pre>
                 }
-                <div class="confirm__botoes">
-                    <button class="confirm__nao" @onclick="() => Responder(false)">Não</button>
-                    <button class="confirm__sim" @onclick="() => Responder(true)">Sim</button>
+                <div class="confirm-botoes">
+                    <button class="confirm-nao" @onclick="() => Responder(false)">Não</button>
+                    <button class="confirm-sim" @onclick="() => Responder(true)">Sim</button>
                 </div>
             </div>
         </div>
@@ -468,14 +468,14 @@
     @if (_permissaoPendente is not null)
     {
         <div class="confirm">
-            <div class="confirm__caixa">
-                <div class="confirm__titulo">Permissão do Claude Code</div>
-                <div class="confirm__acao">@_permissaoPendente.Pedido.Descricao</div>
-                <div class="confirm__botoes confirm__botoes--escopo">
-                    <button class="confirm__nao" @onclick="() => ResponderPermissao(false, EscopoPermissao.UmaVez)">Não</button>
-                    <button class="confirm__sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.UmaVez)">Uma vez</button>
-                    <button class="confirm__sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.SempreNesteDiretorio)">Sempre aqui</button>
-                    <button class="confirm__sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.Sempre)">Sempre</button>
+            <div class="confirm-caixa">
+                <div class="confirm-titulo">Permissão do Claude Code</div>
+                <div class="confirm-acao">@_permissaoPendente.Pedido.Descricao</div>
+                <div class="confirm-botoes confirm-botoes--escopo">
+                    <button class="confirm-nao" @onclick="() => ResponderPermissao(false, EscopoPermissao.UmaVez)">Não</button>
+                    <button class="confirm-sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.UmaVez)">Uma vez</button>
+                    <button class="confirm-sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.SempreNesteDiretorio)">Sempre aqui</button>
+                    <button class="confirm-sim" @onclick="() => ResponderPermissao(true, EscopoPermissao.Sempre)">Sempre</button>
                 </div>
             </div>
         </div>

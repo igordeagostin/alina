@@ -1,17 +1,17 @@
 @* Lista de textos editável: mostra os itens com "remover" e um campo para adicionar. *@
 
-<div class="config__grupo">
-    <span class="config__grupo-titulo">@Titulo</span>
+<div class="config-grupo">
+    <span class="config-grupo-titulo">@Titulo</span>
     @foreach (var item in Itens.ToList())
     {
-        <div class="config__item">
-            <code class="config__item-texto">@item</code>
-            <button class="config__link" @onclick="() => Remover(item)">remover</button>
+        <div class="config-item">
+            <code class="config-item-texto">@item</code>
+            <button class="config-link" @onclick="() => Remover(item)">remover</button>
         </div>
     }
-    <div class="config__item">
-        <input class="config__campo" @bind="_novo" placeholder="@Placeholder" />
-        <button class="config__link" @onclick="Adicionar">adicionar</button>
+    <div class="config-item">
+        <input class="config-campo" @bind="_novo" placeholder="@Placeholder" />
+        <button class="config-link" @onclick="Adicionar">adicionar</button>
     </div>
 </div>
 
