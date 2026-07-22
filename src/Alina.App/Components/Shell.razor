@@ -4,6 +4,7 @@
 @using Alina.Core.Orchestration
 @using Alina.Core.Permissoes
 @using Alina.Infrastructure.Llm
+@using Microsoft.Extensions.AI
 @using Microsoft.JSInterop
 @inject ConfiguracoesLlmService ConfigLlm
 @inject ConfiguracoesClaudeCodeService ConfigClaudeCode
@@ -18,6 +19,7 @@
 @inject SeletorPasta SeletorPasta
 @inject ConfiguracoesService Config
 @inject IHabilidadeStore Habilidades
+@inject IGeradorHabilidade GeradorHab
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -77,6 +79,8 @@
             <div class="cfg__abas">
                 <button class="cfg__aba @(_aba == AbaConfig.Geral ? "cfg__aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.Geral">Geral</button>
+                <button class="cfg__aba @(_aba == AbaConfig.Aparencia ? "cfg__aba--ativa" : "")"
+                        @onclick="() => _aba = AbaConfig.Aparencia">Aparência</button>
                 <button class="cfg__aba @(_aba == AbaConfig.IA ? "cfg__aba--ativa" : "")"
                         @onclick="() => _aba = AbaConfig.IA">IA</button>
                 <button class="cfg__aba @(_aba == AbaConfig.Voz ? "cfg__aba--ativa" : "")"
@@ -105,6 +109,22 @@
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.AbrirEmModoCompacto" />
                         </label>
+                    </div>
+                }
+
+                @if (_aba == AbaConfig.Aparencia)
+                {
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row--empilhado">
+                            <div class="cfg-row__cabecalho">
+                                <span class="cfg-row__titulo">Tamanho do texto</span>
+                                <span class="cfg-row__valor">@((_edicao.EscalaInterface * 100).ToString("0"))%</span>
+                            </div>
+                            <input type="range" class="cfg-range" min="0.8" max="1.4" step="0.05"
+                                   value="@_edicao.EscalaInterface.ToString(CultureInfo.InvariantCulture)"
+                                   @oninput="AoMudarEscalaAsync" />
+                            <span class="cfg-row__sub">Aumenta ou diminui o texto de toda a interface. Ajuste conforme a sua distância da tela — a mudança aparece na hora.</span>
+                        </div>
                     </div>
                 }
 
@@ -319,12 +339,73 @@
                                     <strong class="hab__nome">@h.Nome</strong>
                                     <span class="hab__descricao">@h.Descricao</span>
                                 </div>
+                                <button class="config__link" @onclick="() => VisualizarHabilidadeAsync(h.Nome)">visualizar</button>
                                 <button class="config__link" @onclick="() => EditarHabilidadeAsync(h.Nome)">editar</button>
                                 <button class="config__link" @onclick="() => RemoverHabilidadeAsync(h.Nome)">remover</button>
                             </div>
                         }
-                        <button class="config__confiar" @onclick="NovaHabilidade">＋ Nova habilidade</button>
+                        @if (!_criandoHab && !_editandoHabilidade)
+                        {
+                            <button class="config__confiar" @onclick="IniciarCriacaoHab">＋ Nova habilidade</button>
+                        }
                     </div>
+
+                    @if (_habVisualizando is not null)
+                    {
+                        <div class="config__grupo">
+                            <div class="cfg-row__cabecalho">
+                                <span class="config__grupo-titulo">@_habVisualizando.Nome</span>
+                                <button class="config__link" @onclick="FecharVisualizacao">fechar</button>
+                            </div>
+                            <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_habVisualizando.Conteudo)))</div>
+                        </div>
+                    }
+
+                    @if (_criandoHab)
+                    {
+                        <div class="config__grupo">
+                            <span class="config__grupo-titulo">Nova habilidade — converse com a Alina</span>
+                            <div class="hab-chat">
+                                <div class="hab-chat__log">
+                                    @if (_historicoHab.Count == 0)
+                                    {
+                                        <span class="hab-chat__vazio">Descreva o que você quer que a Alina aprenda — por exemplo, "como eu faço o deploy da API do Diário". Ela pergunta o que faltar e monta o documento.</span>
+                                    }
+                                    @foreach (var m in _historicoHab)
+                                    {
+                                        <div class="msg msg--@(m.Role == ChatRole.User ? "user" : "bot")">@m.Text</div>
+                                    }
+                                    @if (_gerandoHab)
+                                    {
+                                        <div class="msg msg--bot msg--pending">pensando…</div>
+                                    }
+                                </div>
+
+                                @if (_rascunhoHab is not null)
+                                {
+                                    <div class="hab-rascunho">
+                                        <span class="hab-rascunho__titulo">Rascunho: @_rascunhoHab.Titulo</span>
+                                        <span class="hab__descricao">@_rascunhoHab.Descricao</span>
+                                        <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_rascunhoHab.Conteudo)))</div>
+                                        <div class="hab-rascunho__acoes">
+                                            <button class="cfg__salvar" @onclick="AprovarRascunho">Aprovar e editar</button>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="hab-chat__composer">
+                                    <textarea class="config__campo hab-chat__campo" @bind="_inputHab" @bind:event="oninput"
+                                              placeholder="Digite sua mensagem…" disabled="@_gerandoHab"></textarea>
+                                    <button class="cfg__salvar" @onclick="EnviarMensagemHabAsync"
+                                            disabled="@(_gerandoHab || string.IsNullOrWhiteSpace(_inputHab))">Enviar</button>
+                                </div>
+                                <div class="config__item config__item--acoes">
+                                    <button class="config__link" @onclick="PreencherManualmente">preencher manualmente</button>
+                                    <button class="cfg__cancelar" @onclick="CancelarCriacaoHab">Cancelar</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
 
                     @if (_editandoHabilidade)
                     {
@@ -332,8 +413,21 @@
                             <span class="config__grupo-titulo">@(_habEhNova ? "Nova habilidade" : $"Editando: {_habNomeOriginal}")</span>
                             <input class="config__campo" @bind="_habTitulo" placeholder="Título (ex: Deploy da API do Diário)" />
                             <input class="config__campo" @bind="_habDescricao" placeholder="Descrição de uma linha" />
-                            <textarea class="cfg-textarea" @bind="_habConteudo" rows="10"
-                                      placeholder="Instruções da habilidade, em Markdown…"></textarea>
+                            <div class="hab-abas">
+                                <button class="hab-abas__aba @(!_habPreview ? "hab-abas__aba--ativa" : string.Empty)"
+                                        @onclick="() => _habPreview = false">Editar</button>
+                                <button class="hab-abas__aba @(_habPreview ? "hab-abas__aba--ativa" : string.Empty)"
+                                        @onclick="() => _habPreview = true">Pré-visualizar</button>
+                            </div>
+                            @if (_habPreview)
+                            {
+                                <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_habConteudo)))</div>
+                            }
+                            else
+                            {
+                                <textarea class="cfg-textarea" @bind="_habConteudo" rows="10"
+                                          placeholder="Instruções da habilidade, em Markdown…"></textarea>
+                            }
                             <div class="config__item config__item--acoes">
                                 <button class="cfg__cancelar" @onclick="() => _editandoHabilidade = false">Cancelar</button>
                                 <button class="cfg__salvar" @onclick="SalvarHabilidadeAsync"
@@ -394,7 +488,7 @@
     private PedidoPermissaoUi? _permissaoPendente;
     private bool _jsPronto;
 
-    private enum AbaConfig { Geral, IA, Voz, Permissoes, Habilidades }
+    private enum AbaConfig { Geral, Aparencia, IA, Voz, Permissoes, Habilidades }
 
     private bool _configAberta;
     private AbaConfig _aba = AbaConfig.Geral;
@@ -409,10 +503,18 @@
     private List<HabilidadeResumo> _habilidades = new();
     private bool _editandoHabilidade;
     private bool _habEhNova;
+    private bool _habPreview;
     private string _habNomeOriginal = string.Empty;
     private string _habTitulo = string.Empty;
     private string _habDescricao = string.Empty;
     private string _habConteudo = string.Empty;
+
+    private Habilidade? _habVisualizando;
+    private bool _criandoHab;
+    private readonly List<ChatMessage> _historicoHab = new();
+    private string _inputHab = string.Empty;
+    private bool _gerandoHab;
+    private RascunhoHabilidade? _rascunhoHab;
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
@@ -450,11 +552,12 @@
         ConfirmacaoPermissao.Requested += AoSolicitarPermissao;
     }
 
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             _jsPronto = true;
+            await AplicarEscalaAsync(Config.Atual.EscalaInterface);
         }
     }
 
@@ -567,6 +670,7 @@
             SegundosSilencioParaEncerrar = Config.Atual.SegundosSilencioParaEncerrar,
             ConversaContinua = Config.Atual.ConversaContinua,
             SegundosJanelaConversa = Config.Atual.SegundosJanelaConversa,
+            EscalaInterface = Config.Atual.EscalaInterface,
         };
         _iniciarComWindows = Config.IniciarComWindows;
         _modeloLlm = ConfigLlm.ModeloAtual;
@@ -581,7 +685,12 @@
     }
 
     private async Task CarregarHabilidadesAsync()
-        => _habilidades = (await Habilidades.ListarAsync()).ToList();
+    {
+        _habilidades = (await Habilidades.ListarAsync()).ToList();
+        _criandoHab = false;
+        _habVisualizando = null;
+        _rascunhoHab = null;
+    }
 
     private void NovaHabilidade()
     {
@@ -590,12 +699,15 @@
         _habTitulo = string.Empty;
         _habDescricao = string.Empty;
         _habConteudo = string.Empty;
+        _habPreview = false;
+        _habVisualizando = null;
+        _criandoHab = false;
         _editandoHabilidade = true;
     }
 
     private async Task EditarHabilidadeAsync(string nome)
     {
-        var habilidade = await Habilidades.ObterAsync(nome);
+        Habilidade? habilidade = await Habilidades.ObterAsync(nome);
         if (habilidade is null)
         {
             await CarregarHabilidadesAsync();
@@ -607,6 +719,81 @@
         _habTitulo = habilidade.Nome;
         _habDescricao = habilidade.Descricao;
         _habConteudo = habilidade.Conteudo;
+        _habPreview = false;
+        _habVisualizando = null;
+        _criandoHab = false;
+        _editandoHabilidade = true;
+    }
+
+    private async Task VisualizarHabilidadeAsync(string nome)
+    {
+        _habVisualizando = await Habilidades.ObterAsync(nome);
+        _criandoHab = false;
+        _editandoHabilidade = false;
+    }
+
+    private void FecharVisualizacao() => _habVisualizando = null;
+
+    private void IniciarCriacaoHab()
+    {
+        _criandoHab = true;
+        _editandoHabilidade = false;
+        _habVisualizando = null;
+        _historicoHab.Clear();
+        _rascunhoHab = null;
+        _inputHab = string.Empty;
+    }
+
+    private void CancelarCriacaoHab() => _criandoHab = false;
+
+    private void PreencherManualmente()
+    {
+        _criandoHab = false;
+        NovaHabilidade();
+    }
+
+    private async Task EnviarMensagemHabAsync()
+    {
+        string texto = _inputHab?.Trim() ?? string.Empty;
+        if (texto.Length == 0 || _gerandoHab)
+        {
+            return;
+        }
+
+        _historicoHab.Add(new ChatMessage(ChatRole.User, texto));
+        _inputHab = string.Empty;
+        _gerandoHab = true;
+        try
+        {
+            RespostaGeracao resposta = await GeradorHab.ContinuarAsync(_historicoHab);
+            _historicoHab.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
+            _rascunhoHab = resposta.Rascunho;
+        }
+        catch (Exception ex)
+        {
+            _historicoHab.Add(new ChatMessage(ChatRole.Assistant, $"[erro] {ex.Message}"));
+        }
+        finally
+        {
+            _gerandoHab = false;
+        }
+    }
+
+    private void AprovarRascunho()
+    {
+        if (_rascunhoHab is null)
+        {
+            return;
+        }
+
+        _habEhNova = true;
+        _habNomeOriginal = string.Empty;
+        _habTitulo = _rascunhoHab.Titulo;
+        _habDescricao = _rascunhoHab.Descricao;
+        _habConteudo = _rascunhoHab.Conteudo;
+        _habPreview = false;
+        _criandoHab = false;
+        _rascunhoHab = null;
         _editandoHabilidade = true;
     }
 
@@ -649,7 +836,37 @@
         await CarregarHabilidadesAsync();
     }
 
-    private void FecharConfiguracoes() => _configAberta = false;
+    private async Task FecharConfiguracoes()
+    {
+        await AplicarEscalaAsync(Config.Atual.EscalaInterface);
+        _configAberta = false;
+    }
+
+    private async Task AoMudarEscalaAsync(ChangeEventArgs e)
+    {
+        if (double.TryParse(Convert.ToString(e.Value), NumberStyles.Any, CultureInfo.InvariantCulture, out double escala))
+        {
+            _edicao.EscalaInterface = escala;
+            await AplicarEscalaAsync(escala);
+        }
+    }
+
+    private async Task AplicarEscalaAsync(double escala)
+    {
+        if (!_jsPronto)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("alinaInterface.definirEscalaFonte", escala);
+        }
+        catch
+        {
+            // interop pode não estar pronta em transições; ignora
+        }
+    }
 
     private void AbrirSiteVosk() => AbrirExterno(Config.UrlModelosVosk);
 

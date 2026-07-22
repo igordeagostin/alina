@@ -1,4 +1,5 @@
 using Alina.App.Services;
+using Alina.Core.Habilidades;
 using Alina.Core.Orchestration;
 using Alina.Core.Permissoes;
 using Alina.Core.Tools;
@@ -140,6 +141,8 @@ public static class Composition
         builder.Services.AddSingleton<ITool, AprenderHabilidadeTool>();
         builder.Services.AddSingleton<ITool, UsarHabilidadeTool>();
         builder.Services.AddSingleton<ITool, EsquecerHabilidadeTool>();
+        builder.Services.AddSingleton<IGeradorHabilidade>(sp =>
+            new GeradorHabilidade(sp.GetRequiredService<IChatClient>()));
 
         // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
         VoiceOptions voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();

@@ -1,6 +1,9 @@
 :root {
     color-scheme: dark;
 
+    /* Escala do texto (aba Aparência) — multiplica o tamanho-base da raiz. */
+    --escala-fonte: 1;
+
     /* Identidade visual da Alina — Âmbar (ver docs/identidade-visual.md) */
     --accent: #dfa53a;
     --accent-strong: #c48f2e;
@@ -28,13 +31,24 @@
     box-sizing: border-box;
 }
 
+button, input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+}
+
+html {
+    font-size: calc(16px * var(--escala-fonte, 1));
+}
+
 html, body {
     margin: 0;
     height: 100%;
     background: var(--bg);
     color: var(--text);
     font-family: "Segoe UI", system-ui, sans-serif;
-    font-size: 14px;
+    font-size: 1rem;
+    text-rendering: optimizeLegibility;
 }
 
 #app {
@@ -97,7 +111,7 @@ html, body {
     border-radius: 999px;
     background: transparent;
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
@@ -117,7 +131,7 @@ html, body {
     border-radius: 999px;
     background: transparent;
     color: var(--muted);
-    font-size: 15px;
+    font-size: 0.9375rem;
     line-height: 1;
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.3s;
@@ -283,7 +297,7 @@ html, body {
 }
 
 .voz__estado {
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
     color: var(--accent-soft);
     letter-spacing: 0.4px;
@@ -295,7 +309,7 @@ html, body {
 }
 
 .voz__dica {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--muted);
 }
 
@@ -323,7 +337,7 @@ html, body {
 }
 
 .shell--detalhado .voz__estado {
-    font-size: 15px;
+    font-size: 0.9375rem;
 }
 
 /* ---- Log de conversa ---- */
@@ -460,7 +474,7 @@ html, body {
     background: var(--panel-2);
     border: 1px solid var(--border);
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 160px;
@@ -558,12 +572,13 @@ html, body {
 
 .cfg__titulo {
     font-weight: 600;
-    font-size: 16px;
+    font-size: 1rem;
     letter-spacing: 0.3px;
 }
 
 .cfg__abas {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     padding: 10px 12px;
     border-bottom: 1px solid var(--border-soft);
@@ -577,7 +592,7 @@ html, body {
     border-radius: 9px;
     background: transparent;
     color: var(--muted);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     cursor: pointer;
     transition: color 0.15s, background 0.15s, border-color 0.15s;
@@ -675,7 +690,7 @@ html, body {
 
 .cfg-row__sub {
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.35;
 }
 
@@ -694,7 +709,7 @@ html, body {
 .cfg-row__valor {
     color: var(--accent-soft);
     font-weight: 600;
-    font-size: 12px;
+    font-size: 0.75rem;
 }
 
 /* Interruptor */
@@ -800,7 +815,7 @@ html, body {
     padding: 12px 14px;
     border-top: 1px solid var(--border-soft);
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.4;
 }
 
@@ -817,7 +832,7 @@ html, body {
 
 .config__grupo-titulo {
     color: var(--accent-soft);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -834,7 +849,7 @@ html, body {
     flex: 1;
     word-break: break-all;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 
 .config__confiar {
@@ -878,7 +893,7 @@ html, body {
     resize: vertical;
     min-height: 160px;
     font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.5;
 }
 
@@ -894,20 +909,20 @@ html, body {
 .hab__nome {
     display: block;
     color: var(--text);
-    font-size: 12px;
+    font-size: 0.75rem;
 }
 
 .hab__descricao {
     display: block;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 
 .config__ajuda-caminho {
     display: block;
     word-break: break-all;
     color: var(--text);
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 
 .config__ajuda-acoes {
@@ -940,4 +955,188 @@ html, body {
     background: var(--error-bg);
     color: #ffd6dd;
     z-index: 1000;
+}
+
+/* ---- Habilidades: criação conversacional (modo plan) ---- */
+.hab-chat {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hab-chat__log {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.hab-chat__vazio {
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.hab-chat__composer {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.hab-chat__campo {
+    flex: 1;
+    resize: vertical;
+    min-height: 42px;
+    max-height: 160px;
+    font-family: inherit;
+    font-size: 0.8125rem;
+}
+
+.hab-rascunho {
+    border: 1px solid var(--accent-strong);
+    border-radius: 10px;
+    background: var(--accent-glow-soft);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hab-rascunho__titulo {
+    color: var(--accent-soft);
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+
+.hab-rascunho__acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* ---- Habilidades: alternador editar/pré-visualizar ---- */
+.hab-abas {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.hab-abas__aba {
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.hab-abas__aba:hover {
+    color: var(--accent-soft);
+}
+
+.hab-abas__aba--ativa {
+    color: var(--accent);
+    border-color: var(--accent-strong);
+    background: var(--accent-glow-soft);
+}
+
+/* ---- Markdown renderizado ---- */
+.md-render {
+    color: var(--text);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    word-wrap: break-word;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    padding: 14px 16px;
+    min-height: 160px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.md-render h1,
+.md-render h2,
+.md-render h3 {
+    color: var(--accent-soft);
+    line-height: 1.3;
+    margin: 0.9em 0 0.4em;
+}
+
+.md-render h1 { font-size: 1.15rem; }
+.md-render h2 { font-size: 1.05rem; }
+.md-render h3 { font-size: 0.95rem; }
+
+.md-render h1:first-child,
+.md-render h2:first-child,
+.md-render h3:first-child {
+    margin-top: 0;
+}
+
+.md-render p { margin: 0.5em 0; }
+
+.md-render ul,
+.md-render ol {
+    margin: 0.5em 0;
+    padding-left: 1.4em;
+}
+
+.md-render li { margin: 0.25em 0; }
+
+.md-render a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.md-render a:hover { text-decoration: underline; }
+
+.md-render code {
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 0.78em;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+
+.md-render pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    overflow-x: auto;
+}
+
+.md-render pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.md-render blockquote {
+    margin: 0.6em 0;
+    padding: 2px 12px;
+    border-left: 3px solid var(--accent-strong);
+    color: var(--muted);
+}
+
+.md-render table {
+    border-collapse: collapse;
+    margin: 0.6em 0;
+}
+
+.md-render th,
+.md-render td {
+    border: 1px solid var(--border);
+    padding: 5px 9px;
+}
+
+.md-render hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1em 0;
 }

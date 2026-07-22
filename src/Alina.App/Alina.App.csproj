@@ -11,7 +11,10 @@
     <AssemblyName>Alina.App</AssemblyName>
     <UserSecretsId>alina-console</UserSecretsId>
     <ApplicationIcon>Assets\alina.ico</ApplicationIcon>
-    <NoWarn>$(NoWarn);NU1510</NoWarn>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WFO0003: o analisador do WinForms sugere ApplicationHighDpiMode, mas este é um
+         app WPF (entry point System.Windows.Application); o DPI vem do app.manifest. -->
+    <NoWarn>$(NoWarn);NU1510;WFO0003</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Markdig" Version="1.3.2" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.80" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.10" />

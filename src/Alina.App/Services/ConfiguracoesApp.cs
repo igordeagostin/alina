@@ -30,4 +30,7 @@ public sealed class ConfiguracoesApp
 
     /// <summary>Tempo (segundos) que a Alina segue ouvindo antes de dormir na conversa contínua.</summary>
     public double SegundosJanelaConversa { get; set; } = 10;
+
+    /// <summary>Escala do texto da interface (1.0 = padrão). Multiplica o tamanho-base da fonte.</summary>
+    public double EscalaInterface { get; set; } = 1.0;
 }
