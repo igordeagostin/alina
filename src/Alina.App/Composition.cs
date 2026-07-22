@@ -97,6 +97,8 @@ public static class Composition
         // Tools básicas
         builder.Services.AddSingleton<ITool, TerminalTool>();
         builder.Services.AddSingleton<ITool, FileReadTool>();
+        builder.Services.AddSingleton<ITool, ListarDiretorioTool>();
+        builder.Services.AddSingleton<ITool, AbrirNoVsCodeTool>();
 
         // Servidor de permissão (Opção A): pedidos de permissão do Claude Code em modo headless
         // aparecem como overlay na UI (com opções de escopo), em vez de serem bloqueados.
@@ -142,7 +144,9 @@ public static class Composition
         builder.Services.AddSingleton<ITool, UsarHabilidadeTool>();
         builder.Services.AddSingleton<ITool, EsquecerHabilidadeTool>();
         builder.Services.AddSingleton<IGeradorHabilidade>(sp =>
-            new GeradorHabilidade(sp.GetRequiredService<IChatClient>()));
+            new GeradorHabilidade(
+                sp.GetRequiredService<IChatClient>(),
+                sp.GetRequiredService<IPoliticaPermissao>()));
 
         // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
         VoiceOptions voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();

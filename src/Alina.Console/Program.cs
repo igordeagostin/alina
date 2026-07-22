@@ -41,6 +41,8 @@ builder.Services.AddSingleton(confirmation);
 builder.Services.AddSingleton<IConfirmationService>(confirmation);
 builder.Services.AddSingleton<ITool, TerminalTool>();
 builder.Services.AddSingleton<ITool, FileReadTool>();
+builder.Services.AddSingleton<ITool, ListarDiretorioTool>();
+builder.Services.AddSingleton<ITool, AbrirNoVsCodeTool>();
 
 // Confirmação de permissão com escopo (uma vez / sempre / sempre neste diretório),
 // roteada entre console e voz conforme o modo ativo.

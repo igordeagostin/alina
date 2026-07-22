@@ -1,4 +1,5 @@
 using Alina.Core.Habilidades;
+using Alina.Core.Permissoes;
 using Microsoft.Extensions.AI;
 
 namespace Alina.Tests;
@@ -7,6 +8,55 @@ public sealed class GeradorHabilidadeTests
 {
     private static IReadOnlyList<ChatMessage> Historico(string texto)
         => new[] { new ChatMessage(ChatRole.User, texto) };
+
+    private sealed class FakePolitica : IPoliticaPermissao
+    {
+        public FakePolitica(params string[] diretoriosConfiaveis)
+            => Opcoes = new PoliticaPermissaoOptions { DiretoriosConfiaveis = [.. diretoriosConfiaveis] };
+
+        public PoliticaPermissaoOptions Opcoes { get; }
+        public IReadOnlyList<RegraPermissao> Regras => [];
+        public DecisaoPermissao Avaliar(PedidoPermissao pedido) => DecisaoPermissao.Perguntar;
+        public void Aprender(PedidoPermissao pedido, RespostaConfirmacaoPermissao resposta) { }
+        public void AtualizarOpcoes(PoliticaPermissaoOptions opcoes) { }
+        public void RemoverRegra(string id) { }
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_injeta_arvore_dos_diretorios_confiaveis()
+    {
+        string raiz = Path.Combine(Path.GetTempPath(), "alina-hab-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(raiz, "diario", "diario-api"));
+        try
+        {
+            FakeChatClient client = new FakeChatClient((_, _) =>
+                new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+            GeradorHabilidade gerador = new GeradorHabilidade(client, new FakePolitica(raiz));
+
+            await gerador.ContinuarAsync(Historico("abra o projeto diario api"));
+
+            string contexto = string.Concat(
+                client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
+            Assert.Contains(raiz, contexto);
+            Assert.Contains("diario-api", contexto);
+        }
+        finally
+        {
+            Directory.Delete(raiz, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_sem_politica_nao_injeta_contexto_extra()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) =>
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+
+        await gerador.ContinuarAsync(Historico("quero uma habilidade"));
+
+        Assert.Single(client.LastMessages!, m => m.Role == ChatRole.System);
+    }
 
     [Fact]
     public async Task ContinuarAsync_com_pronto_retorna_rascunho_preenchido()

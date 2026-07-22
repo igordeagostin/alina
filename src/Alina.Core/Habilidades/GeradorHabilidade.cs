@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Alina.Core.IO;
+using Alina.Core.Permissoes;
 using Microsoft.Extensions.AI;
 
 namespace Alina.Core.Habilidades;
@@ -6,7 +8,9 @@ namespace Alina.Core.Habilidades;
 /// <summary>
 /// Implementação do gerador conversacional de habilidade. Conversa com o LLM sem
 /// ferramentas (para ele não sair executando nada durante o planejamento) e pede
-/// a resposta em JSON, separando a fala da Alina do rascunho proposto.
+/// a resposta em JSON, separando a fala da Alina do rascunho proposto. Para que a
+/// Alina "enxergue" os projetos sem executar nada, a árvore dos diretórios
+/// confiáveis é injetada no contexto a cada turno.
 /// </summary>
 public sealed class GeradorHabilidade : IGeradorHabilidade
 {
@@ -28,16 +32,28 @@ public sealed class GeradorHabilidade : IGeradorHabilidade
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
     private readonly IChatClient _client;
+    private readonly IPoliticaPermissao? _politica;
 
-    public GeradorHabilidade(IChatClient client) => _client = client;
+    public GeradorHabilidade(IChatClient client, IPoliticaPermissao? politica = null)
+    {
+        _client = client;
+        _politica = politica;
+    }
 
     public async Task<RespostaGeracao> ContinuarAsync(
         IReadOnlyList<ChatMessage> historico, CancellationToken cancellationToken = default)
     {
-        List<ChatMessage> request = new List<ChatMessage>(historico.Count + 1)
+        List<ChatMessage> request = new List<ChatMessage>(historico.Count + 2)
         {
             new(ChatRole.System, InstrucaoSistema),
         };
+
+        string? contextoDiretorios = MontarContextoDiretorios();
+        if (contextoDiretorios is not null)
+        {
+            request.Add(new(ChatRole.System, contextoDiretorios));
+        }
+
         request.AddRange(historico);
 
         ChatResponse response = await _client.GetResponseAsync(request, new ChatOptions(), cancellationToken);
@@ -64,6 +80,26 @@ public sealed class GeradorHabilidade : IGeradorHabilidade
             : null;
 
         return new RespostaGeracao(mensagem, rascunho);
+    }
+
+    private string? MontarContextoDiretorios()
+    {
+        IReadOnlyList<string>? raizes = _politica?.Opcoes.DiretoriosConfiaveis;
+        if (raizes is null || raizes.Count == 0)
+        {
+            return null;
+        }
+
+        string arvore = ArvoreDiretorios.Montar(raizes, profundidadeMaxima: 3);
+        if (arvore.Length == 0)
+        {
+            return null;
+        }
+
+        return "Diretórios confiáveis do usuário (permissão total) e os projetos dentro deles, " +
+            "já lidos do disco. Trate esta listagem como a fonte real dos caminhos: use estes " +
+            "caminhos absolutos ao montar a habilidade e NÃO peça ao usuário para listar o que " +
+            "já aparece aqui.\n\n" + arvore;
     }
 
     private static RascunhoDto? Desserializar(string texto)
