@@ -91,8 +91,29 @@ public static class ServiceCollectionExtensions
             return LlmClientFactory.Create(options, loggerFactory);
         });
 
+        // Opções de geração (temperatura) relidas por turno. Um head de UI pode
+        // substituir este registro para ajustar em runtime.
+        services.AddSingleton<IOpcoesGeracao, OpcoesGeracaoLlm>();
+
         // Orquestrador
         services.AddSingleton<IOrchestrator, ChatOrchestrator>();
+
+        // Orquestradores isolados para as tarefas paralelas: mesmas ferramentas (menos as
+        // que abrem novas tarefas) e memória de trabalho descartável. A resolução tardia
+        // do ToolRegistry é proposital — as tools que disparam paralelismo dependem desta
+        // fábrica, e resolvê-la no construtor fecharia um ciclo.
+        services.AddSingleton<IFabricaOrquestrador>(sp => new FabricaOrquestrador(() => new ChatOrchestrator(
+            sp.GetRequiredService<IChatClient>(),
+            sp.GetRequiredService<ToolRegistry>().SemFerramentas(
+                NomesFerramentas.ExecutarEmParalelo, NomesFerramentas.DelegarEmBackground),
+            ConversationStoreEfemero.Instancia,
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetRequiredService<IMemoryRetriever>(),
+            sp.GetRequiredService<IHabilidadeStore>(),
+            sp.GetService<IPoliticaPermissao>(),
+            sp.GetService<IPersonalidadeStore>(),
+            sp.GetService<IOpcoesGeracao>(),
+            sp.GetService<ILogger<ChatOrchestrator>>())));
 
         return services;
     }

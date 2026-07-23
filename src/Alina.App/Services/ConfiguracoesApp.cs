@@ -22,6 +22,12 @@ public sealed class ConfiguracoesApp
     /// <summary>Termos que interrompem a Alina enquanto ela pensa ou fala, além do próprio nome.</summary>
     public List<string> PalavrasInterrupcao { get; set; } = ["espera", "espere", "chega", "cancela", "esquece"];
 
+    /// <summary>
+    /// Modelo de transcrição (STT) que entende sua fala. "gpt-4o-mini-transcribe" e
+    /// "gpt-4o-transcribe" acertam muito mais o português que o antigo "whisper-1".
+    /// </summary>
+    public string ModeloTranscricao { get; set; } = "gpt-4o-mini-transcribe";
+
     /// <summary>Voz do TTS. Ex.: "nova", "alloy", "shimmer".</summary>
     public string Voz { get; set; } = "nova";
 

@@ -32,6 +32,14 @@ public sealed class LlmOptions
     public string? Endpoint { get; set; }
 
     /// <summary>
+    /// Temperatura de amostragem (0 a 2). Valores baixos deixam a Alina mais
+    /// determinística e obediente — melhor para entender o pedido, decidir e chamar
+    /// ferramentas com consistência; valores altos soltam a criatividade e a tornam
+    /// errática. Nulo mantém o padrão do provedor.
+    /// </summary>
+    public double? Temperature { get; set; } = 0.3;
+
+    /// <summary>
     /// Quando <c>true</c>, gera embeddings das memórias para recuperação semântica.
     /// Se desabilitado (ou sem gerador disponível), a recuperação cai para keyword.
     /// </summary>

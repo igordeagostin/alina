@@ -28,6 +28,7 @@ public sealed class ChatOrchestrator : IOrchestrator
     private readonly IHabilidadeStore _habilidades;
     private readonly IPoliticaPermissao? _politica;
     private readonly IPersonalidadeStore? _personalidade;
+    private readonly IOpcoesGeracao? _opcoesGeracao;
     private readonly ILogger<ChatOrchestrator> _logger;
 
     private Conversation _current = new();
@@ -43,6 +44,7 @@ public sealed class ChatOrchestrator : IOrchestrator
         IHabilidadeStore habilidades,
         IPoliticaPermissao? politica = null,
         IPersonalidadeStore? personalidade = null,
+        IOpcoesGeracao? opcoesGeracao = null,
         ILogger<ChatOrchestrator>? logger = null)
     {
         _client = client;
@@ -53,6 +55,7 @@ public sealed class ChatOrchestrator : IOrchestrator
         _habilidades = habilidades;
         _politica = politica;
         _personalidade = personalidade;
+        _opcoesGeracao = opcoesGeracao;
         _logger = logger ?? NullLogger<ChatOrchestrator>.Instance;
     }
 
@@ -90,6 +93,12 @@ public sealed class ChatOrchestrator : IOrchestrator
         request.AddRange(_current.Messages);
 
         ChatOptions options = new ChatOptions { Tools = _tools.AsAIFunctions() };
+
+        double? temperatura = _opcoesGeracao?.Temperatura;
+        if (temperatura is not null)
+        {
+            options.Temperature = (float)temperatura.Value;
+        }
 
         _logger.LogDebug("Enviando {Count} mensagens ao LLM ({Tools} tools).", request.Count, options.Tools.Count);
 

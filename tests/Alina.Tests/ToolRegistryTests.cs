@@ -29,6 +29,31 @@ public sealed class ToolRegistryTests
     }
 
     [Fact]
+    public void SemFerramentas_oculta_as_informadas_sem_afetar_o_registro_original()
+    {
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: true);
+        ToolRegistry registry = new ToolRegistry(new ITool[] { new TerminalTool(confirmation), new FileReadTool(confirmation) });
+
+        ToolRegistry restrito = registry.SemFerramentas("executar_terminal");
+
+        Assert.Null(restrito.Find("executar_terminal"));
+        Assert.NotNull(restrito.Find("ler_arquivo"));
+        Assert.Single(restrito.AsAIFunctions());
+        Assert.NotNull(registry.Find("executar_terminal"));
+    }
+
+    [Fact]
+    public void SemFerramentas_acumula_exclusoes_ignorando_caixa()
+    {
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: true);
+        ToolRegistry registry = new ToolRegistry(new ITool[] { new TerminalTool(confirmation), new FileReadTool(confirmation) });
+
+        ToolRegistry restrito = registry.SemFerramentas("EXECUTAR_TERMINAL").SemFerramentas("Ler_Arquivo");
+
+        Assert.Empty(restrito.Tools);
+    }
+
+    [Fact]
     public void Terminal_exige_confirmacao_e_leitura_nao()
     {
         FakeConfirmationService confirmation = new FakeConfirmationService(result: true);

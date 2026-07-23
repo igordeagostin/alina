@@ -39,6 +39,9 @@ public sealed class ConfiguracoesLlmService
         /// <summary>Chave da OpenAI cifrada com DPAPI e codificada em base64.</summary>
         public string? ChaveOpenAiProtegida { get; set; }
 
+        /// <summary>Temperatura escolhida na UI; nulo cai no valor do appsettings.</summary>
+        public double? Temperatura { get; set; }
+
         public Dictionary<string, PerfilPersistido> Papeis { get; set; } = [];
     }
 
@@ -124,6 +127,32 @@ public sealed class ConfiguracoesLlmService
     /// <summary>Indica se há uma chave da OpenAI utilizável.</summary>
     public bool ChaveOpenAiDefinida => !string.IsNullOrWhiteSpace(ChaveOpenAi());
 
+    /// <summary>Menor valor de temperatura oferecido na tela (mais determinístico).</summary>
+    public const double TemperaturaMinima = 0;
+
+    /// <summary>Maior valor de temperatura oferecido na tela (mais criativo/errático).</summary>
+    public const double TemperaturaMaxima = 1.5;
+
+    /// <summary>Temperatura efetiva: a salva pela UI ou, na falta dela, a do appsettings (padrão 0.3).</summary>
+    public double Temperatura
+    {
+        get
+        {
+            if (_estado.Temperatura is double salva)
+            {
+                return salva;
+            }
+
+            return double.TryParse(
+                _config[$"{LlmOptions.SectionName}:Temperature"],
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out double doAppsettings)
+                ? doAppsettings
+                : 0.3;
+        }
+    }
+
     /// <summary>
     /// Seleção atual do papel no formato usado pelos selects, ou vazio quando o papel
     /// herda o modelo da conversa.
@@ -178,8 +207,11 @@ public sealed class ConfiguracoesLlmService
 
     /// <param name="selecoes">Seleção por papel; vazio = herdar o papel de conversa.</param>
     /// <param name="chaveOpenAi">Vazio = manter a chave atual; preenchido = substituir.</param>
-    public void Salvar(IReadOnlyDictionary<PapelLlm, string> selecoes, string chaveOpenAi)
+    /// <param name="temperatura">Temperatura de amostragem, dentro dos limites da tela.</param>
+    public void Salvar(IReadOnlyDictionary<PapelLlm, string> selecoes, string chaveOpenAi, double temperatura)
     {
+        _estado.Temperatura = Math.Clamp(temperatura, TemperaturaMinima, TemperaturaMaxima);
+
         foreach ((PapelLlm papel, string selecao) in selecoes)
         {
             PerfilLlm? perfil = Interpretar(selecao);

@@ -5,35 +5,31 @@ using Alina.Voice;
 namespace Alina.App.Services;
 
 /// <summary>
-/// Liga a detecção de palavra de ativação ("Alina") ao fluxo de voz. Com a
-/// assistente ociosa, a palavra dispara o mesmo <see cref="VoiceController.AlternarEscutaAsync"/>
-/// da hotkey. O microfone só é liberado durante a gravação do que você diz; enquanto
-/// a Alina pensa ou fala, a escuta continua ligada — é assim que chamá-la pelo nome
-/// (ou dizer uma das <see cref="VoiceOptions.PalavrasInterrupcao"/>) corta a resposta
-/// no meio e devolve a palavra a você.
+/// Liga a detecção de palavra de ativação ("Alina") ao fluxo de voz: com a assistente
+/// ociosa, dizer o nome dela abre a conversa, como a hotkey e o orbe.
+/// <para>
+/// Só serve para acordá-la. Aberta a conversa, o microfone fica com a sessão de voz do
+/// começo ao fim e o reconhecedor local sai de cena — a partir daí quem escuta é a
+/// própria captura, então você fala quando quiser sem precisar chamar pelo nome, e nada
+/// do que ela estiver fazendo é cancelado por isso.
+/// </para>
 /// </summary>
 public sealed class GerenciadorPalavraAtivacao : IDisposable
 {
     private readonly IDetectorPalavraAtivacao _detector;
     private readonly VoiceController _voz;
-    private readonly IAssistantStatus _status;
     private readonly ConversationUiState _log;
-    private readonly VoiceOptions _opcoes;
 
     private bool _ligado;
 
     public GerenciadorPalavraAtivacao(
         IDetectorPalavraAtivacao detector,
         VoiceController voz,
-        IAssistantStatus status,
-        ConversationUiState log,
-        VoiceOptions opcoes)
+        ConversationUiState log)
     {
         _detector = detector;
         _voz = voz;
-        _status = status;
         _log = log;
-        _opcoes = opcoes;
 
         _detector.PalavraDetectada += AoDetectar;
         _detector.InterrupcaoDetectada += AoDetectarInterrupcao;
@@ -67,7 +63,7 @@ public sealed class GerenciadorPalavraAtivacao : IDisposable
     /// </summary>
     private void RecarregarGramatica()
     {
-        if (_status.Current != AssistantState.Listening)
+        if (!_voz.EmConversa)
         {
             _detector.Pausar();
             _detector.Retomar();
@@ -76,17 +72,13 @@ public sealed class GerenciadorPalavraAtivacao : IDisposable
 
     private void AoOcuparMicrofone() => _detector.Pausar();
 
-    private void AoLiberarMicrofone()
-    {
-        if (_ligado && _opcoes.InterromperPorVoz)
-        {
-            _detector.Retomar();
-        }
-    }
+    private void AoLiberarMicrofone() => RetomarSeOciosa();
 
-    private void AoConcluir()
+    private void AoConcluir() => RetomarSeOciosa();
+
+    private void RetomarSeOciosa()
     {
-        if (_ligado)
+        if (_ligado && !_voz.EmConversa)
         {
             _detector.Retomar();
         }
@@ -94,17 +86,22 @@ public sealed class GerenciadorPalavraAtivacao : IDisposable
 
     private void AoDetectar() => NoDispatcher(() =>
     {
-        if (_status.Current == AssistantState.Idle || _opcoes.InterromperPorVoz)
+        if (!_voz.EmConversa)
         {
             _ = _voz.AlternarEscutaAsync();
         }
     });
 
+    /// <summary>
+    /// Fora da conversa não há o que interromper, e dentro dela o reconhecedor está parado.
+    /// Os pedidos de parar durante a conversa são reconhecidos no texto transcrito, que é
+    /// muito mais confiável que a gramática restrita do modelo local.
+    /// </summary>
     private void AoDetectarInterrupcao() => NoDispatcher(() =>
     {
-        if (_opcoes.InterromperPorVoz && _voz.PodeInterromper)
+        if (_voz.PodeInterromper)
         {
-            _ = _voz.AlternarEscutaAsync();
+            _voz.Interromper();
         }
     });
 

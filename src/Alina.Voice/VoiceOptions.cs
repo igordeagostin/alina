@@ -11,8 +11,8 @@ public sealed class VoiceOptions
     /// <summary>Chave da OpenAI para áudio. Se vazio, reutiliza a chave do LLM (Llm:ApiKey).</summary>
     public string? ApiKey { get; set; }
 
-    /// <summary>Modelo de transcrição (STT). Ex: "whisper-1" ou "gpt-4o-mini-transcribe".</summary>
-    public string SttModel { get; set; } = "whisper-1";
+    /// <summary>Modelo de transcrição (STT). Ex: "gpt-4o-mini-transcribe" ou "whisper-1".</summary>
+    public string SttModel { get; set; } = "gpt-4o-mini-transcribe";
 
     /// <summary>Idioma esperado na transcrição (ISO-639-1), melhora a acurácia. Ex: "pt".</summary>
     public string Language { get; set; } = "pt";
@@ -51,17 +51,18 @@ public sealed class VoiceOptions
     public string[] PalavrasAtivacao { get; set; } = ["alina", "aline", "malina", "adelina", "elina"];
 
     /// <summary>
-    /// Permite cortar a Alina no meio: enquanto ela pensa ou fala, o microfone segue
-    /// escutando e dizer o nome dela (ou uma das <see cref="PalavrasInterrupcao"/>)
-    /// cancela o turno na hora, abrindo espaço para a nova orientação. Funciona melhor
-    /// com fones de ouvido — em caixas de som a própria fala pode se autointerromper.
+    /// Permite falar por cima: enquanto a Alina responde, o microfone segue escutando e
+    /// basta você falar para a voz dela calar na hora e a palavra voltar a ser sua. Nada
+    /// do que ela estiver executando é cancelado por isso — para cancelar de verdade só
+    /// com uma das <see cref="PalavrasInterrupcao"/>. Funciona melhor com fones de ouvido:
+    /// em caixas de som o microfone capta a própria voz dela.
     /// </summary>
     public bool InterromperPorVoz { get; set; } = true;
 
     /// <summary>
-    /// Termos que interrompem a Alina enquanto ela pensa ou fala. Entram na gramática
-    /// restrita do reconhecedor local, junto das <see cref="PalavrasAtivacao"/>. Evite
-    /// palavras comuns em respostas ("para", "não") para não gerar cortes acidentais.
+    /// Termos que mandam a Alina parar de verdade o que está fazendo, reconhecidos no
+    /// texto transcrito quando você diz só isso e mais nada. Evite palavras comuns em
+    /// pedidos normais para não cancelar trabalho sem querer.
     /// </summary>
     public string[] PalavrasInterrupcao { get; set; } = ["espera", "espere", "chega", "cancela", "esquece"];
 

@@ -27,6 +27,14 @@ public sealed class ConfiguracoesService
     public IReadOnlyList<string> VozesDisponiveis { get; } =
         ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "coral", "sage"];
 
+    /// <summary>Modelos de transcrição (STT) oferecidos na tela, do melhor custo-benefício ao mais antigo.</summary>
+    public IReadOnlyList<ModeloTranscricao> ModelosTranscricaoDisponiveis { get; } =
+    [
+        new("gpt-4o-mini-transcribe", "GPT-4o mini transcribe — recomendado (preciso e econômico)"),
+        new("gpt-4o-transcribe", "GPT-4o transcribe — o mais preciso"),
+        new("whisper-1", "Whisper — legado, menos preciso em português"),
+    ];
+
     public ConfiguracoesService(
         StorageOptions armazenamento,
         VoiceOptions voz,
@@ -158,6 +166,11 @@ public sealed class ConfiguracoesService
 
     private void AplicarVoz()
     {
+        if (!string.IsNullOrWhiteSpace(Atual.ModeloTranscricao))
+        {
+            _voz.SttModel = Atual.ModeloTranscricao;
+        }
+
         _voz.Voice = Atual.Voz;
         _voz.Speed = (float)Atual.VelocidadeFala;
         _voz.Enabled = Atual.FalarRespostas;

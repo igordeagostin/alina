@@ -61,6 +61,10 @@ public static class Composition
         builder.Services.AddOptions<LlmOptions>()
             .PostConfigure<ConfiguracoesLlmService>((opcoes, cfg) => cfg.AplicarEm(opcoes));
 
+        // Temperatura ajustável em runtime pela tela de configurações (sobrepõe a leitura
+        // padrão do appsettings feita em AddAlina).
+        builder.Services.AddSingleton<IOpcoesGeracao, OpcoesGeracaoApp>();
+
         // Um cliente de chat por papel (conversa, habilidades, ferramentas), reconfigurável
         // em runtime pela tela de configurações. Substitui o IChatClient de AddAlina, que
         // passa a ser o papel de conversa.
@@ -139,6 +143,7 @@ public static class Composition
 
         // Execução em background (Fase 6)
         builder.Services.AddSingleton<IBackgroundTaskManager, BackgroundTaskManager>();
+        builder.Services.AddSingleton<ITool, TarefaParalelaTool>();
         builder.Services.AddSingleton<ITool, DelegateInBackgroundTool>();
         builder.Services.AddSingleton<ITool, ListTasksTool>();
 

@@ -234,6 +234,15 @@
                     }
 
                     <div class="cfg-card">
+                        <CampoDeslizante Titulo="Temperatura"
+                                         Descricao="Quão previsível a Alina é. Baixa deixa ela mais direta e obediente — entende melhor o pedido e escolhe a ferramenta certa. Alta solta a criatividade e a torna mais errática. Para uma assistente que executa ações, mantenha baixa."
+                                         Minimo="ConfiguracoesLlmService.TemperaturaMinima" Maximo="ConfiguracoesLlmService.TemperaturaMaxima"
+                                         Passo="0.1" Casas="1"
+                                         Valor="_temperatura"
+                                         ValorChanged="(double v) => _temperatura = v" />
+                    </div>
+
+                    <div class="cfg-card">
                         <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Modelo do Claude Code</span>
                             <select class="cfg-campo" @bind="_modeloClaudeCode">
@@ -346,6 +355,19 @@
 
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row-empilhado">
+                            <span class="cfg-row-titulo">Como a Alina entende sua fala</span>
+                            <select class="cfg-campo" @bind="_edicao.ModeloTranscricao">
+                                @foreach (ModeloTranscricao m in Config.ModelosTranscricaoDisponiveis)
+                                {
+                                    <option value="@m.Id">@m.Rotulo</option>
+                                }
+                            </select>
+                            <span class="cfg-row-sub">Modelo de transcrição da sua voz. Se a Alina anda "entendendo errado" o que você fala, use um dos modelos GPT-4o — acertam o português muito melhor que o Whisper antigo.</span>
+                        </div>
+                    </div>
+
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Voz da Alina</span>
                             <div class="cfg-voz">
                                 <select class="cfg-campo" @bind="_edicao.Voz">
@@ -392,13 +414,13 @@
                     <div class="cfg-card">
                         <label class="cfg-row">
                             <div class="cfg-row-texto">
-                                <span class="cfg-row-titulo">Deixar interromper por voz</span>
-                                <span class="cfg-row-sub">Enquanto ela pensa ou fala, chamá-la pelo nome corta a resposta na hora. Melhor com fones de ouvido</span>
+                                <span class="cfg-row-titulo">Deixar falar por cima</span>
+                                <span class="cfg-row-sub">Falar enquanto ela responde cala a voz dela na hora, como numa conversa de verdade — sem cancelar nada do que ela estiver fazendo. Melhor com fones de ouvido</span>
                             </div>
                             <input type="checkbox" class="cfg-switch" @bind="_edicao.InterromperPorVoz"
                                    disabled="@(!Config.PalavraAtivacaoDisponivel || !_edicao.EscutarPalavraAtivacao)" />
                         </label>
-                        <ListaEditavel Titulo="Outras palavras que interrompem"
+                        <ListaEditavel Titulo="Palavras que mandam parar de verdade"
                                        Itens="_edicao.PalavrasInterrupcao"
                                        Placeholder="espera" />
                     </div>
@@ -537,6 +559,7 @@
     private string _modeloClaudeCode = string.Empty;
     private string _esforcoClaudeCode = string.Empty;
     private string _chaveOpenAi = string.Empty;
+    private double _temperatura = 0.3;
     private PoliticaPermissaoOptions _permOpcoes = new();
     private string _novoDiretorio = string.Empty;
     private string _pastaDados = string.Empty;
@@ -544,13 +567,9 @@
 
     private bool Ocupado => Status.Current is AssistantState.Thinking or AssistantState.Executing or AssistantState.Speaking;
 
-    private string RotuloMicrofone => Status.Current switch
-    {
-        AssistantState.Listening => "Parar de gravar",
-        AssistantState.Thinking or AssistantState.Executing => "Cancelar e falar",
-        AssistantState.Speaking => "Interromper e falar",
-        _ => "Falar com a Alina (Ctrl+Espaço)",
-    };
+    private string RotuloMicrofone => Voz.EmConversa
+        ? "Encerrar a conversa"
+        : "Falar com a Alina (Ctrl+Espaço)";
 
     private string TextoEstado => Status.Current switch
     {
@@ -563,9 +582,10 @@
 
     private string DicaEstado => Status.Current switch
     {
-        AssistantState.Listening => "toque de novo para enviar",
-        AssistantState.Executing => "rodando uma ferramenta — toque para cancelar",
-        AssistantState.Thinking or AssistantState.Speaking => "pode cortar: toque no orbe ou fale",
+        AssistantState.Listening => "pode falar — o resto continua rodando",
+        AssistantState.Executing => "rodando uma ferramenta — fale à vontade",
+        AssistantState.Thinking => "pensando, mas ouvindo você",
+        AssistantState.Speaking => "fale por cima que ela para",
         _ => "modo voz — Ctrl+Espaço de qualquer lugar",
     };
 
@@ -748,6 +768,7 @@
         _modeloClaudeCode = ConfigClaudeCode.ModeloAtual;
         _esforcoClaudeCode = ConfigClaudeCode.EsforcoTextoAtual;
         _chaveOpenAi = string.Empty;
+        _temperatura = ConfigLlm.Temperatura;
         _permOpcoes = ClonarOpcoes(Politica.Opcoes);
         _novoDiretorio = string.Empty;
         _pastaDados = PastaDados.PastaAtual;
@@ -886,7 +907,7 @@
 
     private void SalvarLlm()
     {
-        ConfigLlm.Salvar(_selecaoPapel, _chaveOpenAi);
+        ConfigLlm.Salvar(_selecaoPapel, _chaveOpenAi, _temperatura);
 
         // Aplica modelo/chave aos clientes já criados. Um papel que não puder ser recriado
         // mantém o cliente anterior; se a chave for inválida, o erro aparece ao conversar.

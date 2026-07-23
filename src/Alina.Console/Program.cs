@@ -70,6 +70,7 @@ builder.Services.AddSingleton<ITool>(sp => sp.GetRequiredService<ClaudeCodeTool>
 
 // Execução em background (Fase 6)
 builder.Services.AddSingleton<IBackgroundTaskManager, BackgroundTaskManager>();
+builder.Services.AddSingleton<ITool, TarefaParalelaTool>();
 builder.Services.AddSingleton<ITool, DelegateInBackgroundTool>();
 builder.Services.AddSingleton<ITool, ListTasksTool>();
 
