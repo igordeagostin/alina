@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Alina.Core.IO;
 using Alina.Core.Tools;
 using Microsoft.Extensions.AI;
 
@@ -152,7 +153,7 @@ internal sealed class FuncaoFerramenta : AIFunction
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-        };
+        }.AplicarUtf8();
 
         if (!string.IsNullOrWhiteSpace(diretorioTrabalho))
         {

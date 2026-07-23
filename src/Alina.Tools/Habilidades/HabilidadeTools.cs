@@ -20,7 +20,10 @@ public sealed class AprenderHabilidadeTool : ToolBase
         "Ensina uma nova habilidade à Alina, persistindo-a como um documento permanente. " +
         "Use quando o usuário pedir para você APRENDER uma habilidade, um jeito de fazer algo ou um " +
         "conhecimento nomeado e reutilizável. Se já existir uma habilidade com o mesmo nome, o usuário " +
-        "será consultado antes de sobrescrever.";
+        "será consultado antes de sobrescrever. " +
+        "Antes de gravar, veja se algum passo é uma ação concreta e repetível que nenhuma ferramenta atual " +
+        "cobre: nesse caso chame 'criar_ferramenta' para ela primeiro e escreva o documento mandando chamar " +
+        "essa ferramenta pelo nome. O documento só pode citar ferramentas que existam.";
 
     public override AIFunction AsAIFunction() => AIFunctionFactory.Create(RunAsync, Name, Description);
 

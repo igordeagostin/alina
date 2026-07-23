@@ -1,7 +1,7 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Alina.Core.IO;
 using Alina.Core.Permissoes;
+using Alina.Core.Tools;
 using Microsoft.Extensions.AI;
 
 namespace Alina.Core.Ferramentas;
@@ -37,25 +37,12 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
         RegrasEFormato;
 
     private const string RegrasEFormato =
-        "Regras da definição:\n" +
-        "- Os argumentos usam placeholders {parametro} que serão substituídos pelos valores informados na hora.\n" +
-        "- Cada placeholder usado deve ter um parâmetro correspondente na lista.\n" +
-        "- Cada argumento é passado literalmente ao processo (não há shell reinterpretando): para lógica de shell, " +
-        "invoque explicitamente (ex.: comando 'powershell' com argumentos ['-NoProfile','-Command','...']).\n" +
-        "- 'exigeConfirmacao' deve ser true para qualquer coisa destrutiva ou com efeito colateral relevante; " +
-        "só use false para ações seguras e idempotentes (o que dispensa o SIM/NÃO).\n\n" +
+        RegrasFerramenta.Regras + "\n\n" +
         "Responda SEMPRE apenas com um objeto JSON (sem texto fora dele e sem cercas de código) com os campos:\n" +
         "- \"mensagem\": o que dizer ao usuário no chat (pergunta ou, ao propor, um resumo curto e o convite para revisar).\n" +
         "- \"pronto\": true quando estiver propondo a ferramenta; false enquanto ainda coleta informação.\n" +
         "Quando pronto=true, inclua também:\n" +
-        "- \"nome\": identificador snake_case da ferramenta (ex.: \"deploy_diario\").\n" +
-        "- \"descricao\": uma linha dizendo o que a ferramenta faz (ajuda você a decidir quando usá-la).\n" +
-        "- \"comando\": o executável a chamar (ex.: \"powershell\", \"git\", \"node\", \"cmd\").\n" +
-        "- \"argumentos\": array de strings com os argumentos (podendo conter {placeholders}).\n" +
-        "- \"exigeConfirmacao\": booleano.\n" +
-        "- \"parametros\": array de objetos { \"nome\", \"descricao\", \"obrigatorio\", \"tipo\" } — um por placeholder. " +
-        "O \"tipo\" é \"Diretorio\" ou \"Arquivo\" quando o valor é um caminho que precisa existir no disco (a ferramenta " +
-        "recusa a chamada se não existir, em vez de executar às cegas), e \"Texto\" para o resto.";
+        RegrasFerramenta.Campos;
 
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
@@ -67,11 +54,16 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
 
     private readonly IChatClient _client;
     private readonly IPoliticaPermissao? _politica;
+    private readonly ToolRegistry? _existentes;
 
-    public GeradorFerramenta(IChatClient client, IPoliticaPermissao? politica = null)
+    public GeradorFerramenta(
+        IChatClient client,
+        IPoliticaPermissao? politica = null,
+        ToolRegistry? existentes = null)
     {
         _client = client;
         _politica = politica;
+        _existentes = existentes;
     }
 
     public async Task<RespostaGeracaoFerramenta> ContinuarAsync(
@@ -87,6 +79,12 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
         if (contexto is not null)
         {
             request.Add(new(ChatRole.System, MontarContextoFerramenta(contexto.Atual)));
+        }
+
+        string? contextoExistentes = MontarContextoExistentes(contexto);
+        if (contextoExistentes is not null)
+        {
+            request.Add(new(ChatRole.System, contextoExistentes));
         }
 
         string? contextoDiretorios = MontarContextoDiretorios();
@@ -112,39 +110,39 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
             ? "Pronto, montei um rascunho. Quer revisar?"
             : dto.Mensagem!.Trim();
 
-        bool completo = dto.Pronto
-            && !string.IsNullOrWhiteSpace(dto.Nome)
-            && !string.IsNullOrWhiteSpace(dto.Comando);
-
-        RascunhoFerramenta? rascunho = completo
-            ? new RascunhoFerramenta(MontarDefinicao(dto), mensagem)
-            : null;
+        DefinicaoFerramenta? definicao = dto.Pronto ? dto.ParaDefinicao() : null;
+        RascunhoFerramenta? rascunho = definicao is null ? null : new RascunhoFerramenta(definicao, mensagem);
 
         return new RespostaGeracaoFerramenta(mensagem, rascunho);
     }
 
-    private static DefinicaoFerramenta MontarDefinicao(RascunhoDto dto) => new DefinicaoFerramenta
-    {
-        Nome = dto.Nome!.Trim(),
-        Descricao = dto.Descricao?.Trim() ?? string.Empty,
-        Comando = dto.Comando!.Trim(),
-        Argumentos = dto.Argumentos ?? Array.Empty<string>(),
-        ExigeConfirmacao = dto.ExigeConfirmacao,
-        Parametros = (dto.Parametros ?? new List<ParametroDto>())
-            .Where(p => !string.IsNullOrWhiteSpace(p.Nome))
-            .Select(p => new ParametroFerramenta
-            {
-                Nome = p.Nome!.Trim(),
-                Descricao = p.Descricao?.Trim() ?? string.Empty,
-                Obrigatorio = p.Obrigatorio,
-                Tipo = p.Tipo,
-            })
-            .ToList(),
-    };
-
     private static string MontarContextoFerramenta(DefinicaoFerramenta atual) =>
         "Ferramenta atual, exatamente como está salva. É esta que você está revisando:\n\n" +
         JsonSerializer.Serialize(atual, OpcoesContexto);
+
+    private string? MontarContextoExistentes(ContextoFerramenta? contexto)
+    {
+        if (_existentes is null)
+        {
+            return null;
+        }
+
+        List<ITool> outras = _existentes.Tools
+            .Where(t => contexto is null || !t.Name.Equals(contexto.Atual.Nome, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        string? catalogo = CatalogoFerramentas.Descrever(outras);
+        if (string.IsNullOrWhiteSpace(catalogo))
+        {
+            return null;
+        }
+
+        return "Ferramentas que você já expõe hoje. Entre parênteses vêm os parâmetros; os terminados " +
+            "em '?' são opcionais.\n\n" + catalogo + "\n\n" +
+            "Antes de propor uma nova, verifique se alguma destas já resolve o pedido — se resolver, diga " +
+            "isso ao usuário em vez de duplicar. O nome proposto precisa ser diferente de todos os desta " +
+            "lista: um nome repetido é descartado no registro e a ferramenta nunca fica disponível.";
+    }
 
     private string? MontarContextoDiretorios()
     {
@@ -207,26 +205,9 @@ public sealed class GeradorFerramenta : IGeradorFerramenta
         return abre >= 0 && fecha > abre ? t[abre..(fecha + 1)] : string.Empty;
     }
 
-    private sealed class RascunhoDto
+    private sealed class RascunhoDto : FerramentaJson
     {
         public string? Mensagem { get; set; }
         public bool Pronto { get; set; }
-        public string? Nome { get; set; }
-        public string? Descricao { get; set; }
-        public string? Comando { get; set; }
-        public string[]? Argumentos { get; set; }
-
-        [JsonPropertyName("exigeConfirmacao")]
-        public bool ExigeConfirmacao { get; set; } = true;
-
-        public List<ParametroDto>? Parametros { get; set; }
-    }
-
-    private sealed class ParametroDto
-    {
-        public string? Nome { get; set; }
-        public string? Descricao { get; set; }
-        public bool Obrigatorio { get; set; } = true;
-        public TipoParametroFerramenta Tipo { get; set; } = TipoParametroFerramenta.Automatico;
     }
 }

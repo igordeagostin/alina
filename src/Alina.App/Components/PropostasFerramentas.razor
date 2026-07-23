@@ -1,0 +1,71 @@
+@* Ferramentas que a Alina propôs junto com a habilidade: cada uma pode ser aceita ou recusada antes de salvar. *@
+
+@using System.Text.Json
+@using Alina.Core.Ferramentas
+@using Alina.Core.Habilidades
+
+<div class="cat-propostas">
+    <span class="cat-propostas-titulo">Ferramentas que faltam para esta habilidade funcionar</span>
+    <span class="cfg-row-sub">
+        A Alina não tem nenhuma ação chamável para estes passos. As marcadas são criadas junto com a
+        habilidade; desmarque o que você não quiser.
+    </span>
+
+    @foreach (FerramentaProposta proposta in Propostas)
+    {
+        bool aceita = !Recusadas.Contains(proposta.Definicao.Nome);
+        <div class="cat-proposta @(aceita ? string.Empty : "cat-proposta-recusada")">
+            <label class="cat-proposta-cabecalho">
+                <input type="checkbox" checked="@aceita" @onchange="() => Alternar.InvokeAsync(proposta.Definicao.Nome)" />
+                <span class="cat-proposta-texto">
+                    <span class="cat-item-nome">@proposta.Definicao.Nome</span>
+                    <span class="cat-item-descricao">
+                        @(string.IsNullOrWhiteSpace(proposta.Definicao.Descricao) ? "sem descrição" : proposta.Definicao.Descricao)
+                    </span>
+                    @if (!string.IsNullOrWhiteSpace(proposta.Motivo))
+                    {
+                        <span class="cat-proposta-motivo">@proposta.Motivo</span>
+                    }
+                    <span class="cat-proposta-selo">
+                        @(proposta.Definicao.ExigeConfirmacao ? "🔒 pede confirmação ao executar" : "⚡ roda sem confirmação")
+                    </span>
+                    @if (proposta.SubstituiExistente)
+                    {
+                        <span class="cat-proposta-aviso">já existe uma ferramenta com este nome — salvar substitui a atual</span>
+                    }
+                </span>
+            </label>
+            <button class="config-link" @onclick="() => AlternarJson(proposta.Definicao.Nome)">
+                @(_abertas.Contains(proposta.Definicao.Nome) ? "ocultar definição" : "ver definição")
+            </button>
+            @if (_abertas.Contains(proposta.Definicao.Nome))
+            {
+                <pre class="cfg-textarea cat-json">@Serializar(proposta.Definicao)</pre>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions OpcoesJson = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    [Parameter, EditorRequired] public IReadOnlyList<FerramentaProposta> Propostas { get; set; } = Array.Empty<FerramentaProposta>();
+    [Parameter, EditorRequired] public HashSet<string> Recusadas { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    [Parameter] public EventCallback<string> Alternar { get; set; }
+
+    private readonly HashSet<string> _abertas = new(StringComparer.OrdinalIgnoreCase);
+
+    private static string Serializar(DefinicaoFerramenta definicao) => JsonSerializer.Serialize(definicao, OpcoesJson);
+
+    private void AlternarJson(string nome)
+    {
+        if (!_abertas.Add(nome))
+        {
+            _abertas.Remove(nome);
+        }
+    }
+}

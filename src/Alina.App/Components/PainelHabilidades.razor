@@ -2,10 +2,12 @@
    visualizar, editar com a Alina, editar o texto ou treinar. *@
 
 @using Alina.App.Services
+@using Alina.Core.Ferramentas
 @using Alina.Core.Habilidades
 @using Alina.Core.Orchestration
 @using Microsoft.Extensions.AI
 @inject IHabilidadeStore Habilidades
+@inject IFerramentaStore Ferramentas
 @inject IGeradorHabilidade Gerador
 @inject VoiceController Voz
 @inject IAssistantStatus Status
@@ -15,7 +17,7 @@
     <div class="cfg-card">
         <div class="cfg-row cfg-row-empilhado">
             <span class="cfg-row-titulo">Habilidades aprendidas</span>
-            <span class="cfg-row-sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Alterações aqui são gravadas na hora.</span>
+            <span class="cfg-row-sub">Cada habilidade é um documento que a Alina consulta quando for relevante. Quando um passo exige uma ação que ela ainda não sabe executar, a ferramenta vem proposta junto — você aceita ou recusa. Alterações aqui são gravadas na hora.</span>
         </div>
     </div>
 
@@ -80,6 +82,10 @@ else
 
         @if (_modo == Modo.Detalhe && _selecionada is not null)
         {
+            @if (!string.IsNullOrEmpty(_avisoFerramentas))
+            {
+                <span class="cat-aviso-ok">@_avisoFerramentas</span>
+            }
             <div class="cat-acoes">
                 <button class="config-link" @onclick="() => ConversarAsync(_selecionada.Nome)">✦ ajustar com a Alina</button>
                 <button class="config-link" @onclick="() => TreinarAsync(_selecionada.Nome)">🎯 treinar</button>
@@ -97,6 +103,10 @@ else
                         <CartaoRascunho Titulo="@RotuloRascunho" Descricao="@_rascunho.Descricao"
                                         RotuloAplicar="@RotuloAplicar" Revisar="RevisarRascunho" Aplicar="AplicarRascunhoAsync">
                             <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_rascunho.Conteudo)))</div>
+                            @if (_propostas.Count > 0)
+                            {
+                                <PropostasFerramentas Propostas="_propostas" Recusadas="_recusadas" Alternar="AlternarProposta" />
+                            }
                         </CartaoRascunho>
                     }
                 </Rascunho>
@@ -133,6 +143,10 @@ else
                         <CartaoRascunho Titulo="@RotuloRascunho" Descricao="@_rascunho.Descricao"
                                         RotuloAplicar="@RotuloAplicar" Revisar="RevisarRascunho" Aplicar="AplicarRascunhoAsync">
                             <div class="md-render">@(new MarkupString(MarkdownRenderer.ParaHtml(_rascunho.Conteudo)))</div>
+                            @if (_propostas.Count > 0)
+                            {
+                                <PropostasFerramentas Propostas="_propostas" Recusadas="_recusadas" Alternar="AlternarProposta" />
+                            }
                         </CartaoRascunho>
                     }
                 </Rascunho>
@@ -161,6 +175,10 @@ else
                 <textarea class="cfg-textarea" @bind="_conteudo" rows="12"
                           placeholder="Instruções da habilidade, em Markdown…"></textarea>
             }
+            @if (_propostas.Count > 0)
+            {
+                <PropostasFerramentas Propostas="_propostas" Recusadas="_recusadas" Alternar="AlternarProposta" />
+            }
             <div class="cat-acoes">
                 <button class="cfg-cancelar" @onclick="VoltarAsync">Cancelar</button>
                 <button class="cfg-salvar" @onclick="SalvarEditorAsync"
@@ -185,6 +203,10 @@ else
     private ContextoHabilidade? _contexto;
     private RascunhoHabilidade? _rascunho;
     private bool _gerando;
+
+    private List<FerramentaProposta> _propostas = new();
+    private readonly HashSet<string> _recusadas = new(StringComparer.OrdinalIgnoreCase);
+    private string _avisoFerramentas = string.Empty;
 
     private string _pedidoTeste = string.Empty;
     private bool _executandoTeste;
@@ -233,8 +255,8 @@ else
     };
 
     private string DicaChat => _contexto is null
-        ? "Descreva o que você quer que a Alina aprenda — por exemplo, \"como eu faço o deploy da API do Diário\". Ela pergunta o que faltar e monta o documento."
-        : "Diga o que mudar — por exemplo, \"o passo 3 mudou de branch\" ou \"acrescenta o comando de rollback\".";
+        ? "Descreva o que você quer que a Alina aprenda — por exemplo, \"como eu faço o deploy da API do Diário\". Ela pergunta o que faltar, monta o documento e, se faltar alguma ação que ela ainda não sabe executar, propõe a ferramenta junto."
+        : "Diga o que mudar — por exemplo, \"o passo 3 mudou de branch\" ou \"acrescenta o comando de rollback\". Se a mudança exigir uma ação nova, ela propõe a ferramenta junto.";
 
     protected override async Task OnInitializedAsync() => await CarregarAsync();
 
@@ -256,6 +278,7 @@ else
         }
 
         _confirmandoRemocao = null;
+        _avisoFerramentas = string.Empty;
         _modo = Modo.Detalhe;
     }
 
@@ -336,6 +359,17 @@ else
         _rascunho = null;
         _gerando = false;
         _confirmandoRemocao = null;
+        _propostas = new List<FerramentaProposta>();
+        _recusadas.Clear();
+        _avisoFerramentas = string.Empty;
+    }
+
+    private void AlternarProposta(string nome)
+    {
+        if (!_recusadas.Add(nome))
+        {
+            _recusadas.Remove(nome);
+        }
     }
 
     private async Task EnviarAsync(string texto)
@@ -352,6 +386,8 @@ else
             RespostaGeracao resposta = await Gerador.ContinuarAsync(_historico, _contexto);
             _historico.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
             _rascunho = resposta.Rascunho;
+            _propostas = resposta.Rascunho?.Ferramentas.ToList() ?? new List<FerramentaProposta>();
+            _recusadas.RemoveWhere(nome => !_propostas.Any(p => p.Definicao.Nome.Equals(nome, StringComparison.OrdinalIgnoreCase)));
         }
         catch (Exception ex)
         {
@@ -418,6 +454,8 @@ else
             Conteudo = _rascunho.Conteudo,
         };
 
+        IReadOnlyList<string> criadas = await GravarFerramentasAceitasAsync();
+        _avisoFerramentas = criadas.Count == 0 ? string.Empty : $"Criei também {DescreverCriadas(criadas)}.";
         await GravarAsync(nova, _contexto?.Atual.Nome);
         _rascunho = null;
 
@@ -425,7 +463,9 @@ else
         {
             _contexto = new ContextoHabilidade(nova, ModoConversaHabilidade.Treino);
             _selecionada = nova;
-            _historico.Add(new ChatMessage(ChatRole.Assistant, "Salvei a nova versão. Pode testar de novo."));
+            _historico.Add(new ChatMessage(ChatRole.Assistant, criadas.Count == 0
+                ? "Salvei a nova versão. Pode testar de novo."
+                : $"Salvei a nova versão e criei {DescreverCriadas(criadas)}. Pode testar de novo."));
             return;
         }
 
@@ -448,11 +488,41 @@ else
             Conteudo = _conteudo,
         };
 
+        IReadOnlyList<string> criadas = await GravarFerramentasAceitasAsync();
+        _avisoFerramentas = criadas.Count == 0 ? string.Empty : $"Criei também {DescreverCriadas(criadas)}.";
         await GravarAsync(nova, _ehNova ? null : _nomeOriginal);
         _selecionada = nova;
         _contexto = null;
         _modo = Modo.Detalhe;
     }
+
+    /// <summary>
+    /// Grava as ferramentas propostas que o usuário não recusou. Vêm antes da habilidade
+    /// porque o documento já as cita pelo nome — salvar só o texto deixaria a habilidade
+    /// mandando chamar algo que não existe.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> GravarFerramentasAceitasAsync()
+    {
+        List<string> criadas = new();
+        foreach (FerramentaProposta proposta in _propostas)
+        {
+            if (_recusadas.Contains(proposta.Definicao.Nome))
+            {
+                continue;
+            }
+
+            await Ferramentas.SalvarAsync(proposta.Definicao);
+            criadas.Add(proposta.Definicao.Nome);
+        }
+
+        _propostas = new List<FerramentaProposta>();
+        _recusadas.Clear();
+        return criadas;
+    }
+
+    private static string DescreverCriadas(IReadOnlyList<string> nomes) => nomes.Count == 1
+        ? $"a ferramenta {nomes[0]}"
+        : $"as ferramentas {string.Join(", ", nomes)}";
 
     private async Task GravarAsync(Habilidade nova, string? nomeAnterior)
     {

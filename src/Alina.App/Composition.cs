@@ -163,7 +163,8 @@ public static class Composition
         builder.Services.AddSingleton<IGeradorHabilidade>(sp =>
             new GeradorHabilidade(
                 sp.GetRequiredService<RegistroClientesLlm>().Obter(PapelLlm.Habilidades),
-                sp.GetRequiredService<IPoliticaPermissao>()));
+                sp.GetRequiredService<IPoliticaPermissao>(),
+                sp.GetRequiredService<ToolRegistry>()));
 
         // Ferramentas declarativas: tools de criar/esquecer + gerador conversacional.
         // O store e o provider vêm de AddAlina.
@@ -172,7 +173,8 @@ public static class Composition
         builder.Services.AddSingleton<IGeradorFerramenta>(sp =>
             new GeradorFerramenta(
                 sp.GetRequiredService<RegistroClientesLlm>().Obter(PapelLlm.Ferramentas),
-                sp.GetRequiredService<IPoliticaPermissao>()));
+                sp.GetRequiredService<IPoliticaPermissao>(),
+                sp.GetRequiredService<ToolRegistry>()));
 
         // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio
         VoiceOptions voiceOptions = builder.Configuration.GetSection(VoiceOptions.SectionName).Get<VoiceOptions>() ?? new VoiceOptions();

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Alina.Core.IO;
 using Alina.Core.Permissoes;
 using Alina.Core.Tools;
 using Microsoft.Extensions.AI;
@@ -480,7 +481,7 @@ public sealed class ClaudeCodeTool : ToolBase
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-        };
+        }.AplicarUtf8();
 
         if (!string.IsNullOrWhiteSpace(workingDirectory))
         {

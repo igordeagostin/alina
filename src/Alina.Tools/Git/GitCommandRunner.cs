@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Alina.Core.IO;
 
 namespace Alina.Tools.Git;
 
@@ -29,7 +30,7 @@ internal static class GitCommandRunner
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = directory,
-        };
+        }.AplicarUtf8();
 
         foreach (string arg in arguments)
         {

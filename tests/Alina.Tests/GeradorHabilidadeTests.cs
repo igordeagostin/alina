@@ -1,5 +1,8 @@
+using Alina.Core.Ferramentas;
 using Alina.Core.Habilidades;
 using Alina.Core.Permissoes;
+using Alina.Core.Tools;
+using Alina.Infrastructure.Ferramentas;
 using Microsoft.Extensions.AI;
 
 namespace Alina.Tests;
@@ -8,6 +11,15 @@ public sealed class GeradorHabilidadeTests
 {
     private static IReadOnlyList<ChatMessage> Historico(string texto)
         => new[] { new ChatMessage(ChatRole.User, texto) };
+
+    private static ToolRegistry RegistroCom(params string[] nomes)
+    {
+        FakeConfirmationService confirmation = new FakeConfirmationService(result: true);
+        IEnumerable<ITool> tools = nomes.Select(nome => (ITool)new FerramentaDeclarada(
+            new DefinicaoFerramenta { Nome = nome, Descricao = "ferramenta de teste", Comando = "cmd" },
+            confirmation));
+        return new ToolRegistry(tools);
+    }
 
     private sealed class FakePolitica : IPoliticaPermissao
     {
@@ -192,6 +204,118 @@ public sealed class GeradorHabilidadeTests
             client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
         Assert.Contains("criar uma nova \"habilidade\"", contexto);
         Assert.DoesNotContain("Habilidade atual", contexto);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_traz_as_ferramentas_propostas_no_rascunho()
+    {
+        string json = """
+            {
+              "mensagem": "Precisa de uma ferramenta para tocar no Spotify.",
+              "pronto": true,
+              "titulo": "Gerenciar o Spotify",
+              "descricao": "Controla a reprodução no Spotify",
+              "conteudo": "# Spotify\n1. chame spotify_tocar",
+              "ferramentas": [
+                {
+                  "nome": "spotify_tocar",
+                  "descricao": "Toca uma playlist no Spotify",
+                  "motivo": "Nenhuma ferramenta atual fala com o Spotify.",
+                  "comando": "powershell",
+                  "argumentos": ["-NoProfile", "-Command", "spotify play {playlist}"],
+                  "exigeConfirmacao": false,
+                  "parametros": [
+                    { "nome": "playlist", "descricao": "Nome da playlist", "obrigatorio": true }
+                  ]
+                }
+              ]
+            }
+            """;
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+
+        RespostaGeracao resposta = await gerador.ContinuarAsync(Historico("quero gerenciar o spotify"));
+
+        FerramentaProposta proposta = Assert.Single(resposta.Rascunho!.Ferramentas);
+        Assert.Equal("spotify_tocar", proposta.Definicao.Nome);
+        Assert.Equal("Nenhuma ferramenta atual fala com o Spotify.", proposta.Motivo);
+        Assert.False(proposta.Definicao.ExigeConfirmacao);
+        Assert.False(proposta.SubstituiExistente);
+        Assert.Equal("playlist", Assert.Single(proposta.Definicao.Parametros).Nome);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_marca_proposta_que_substitui_ferramenta_existente()
+    {
+        string json = """
+            {
+              "mensagem": "Vou trocar a ferramenta atual.",
+              "pronto": true,
+              "titulo": "Spotify",
+              "conteudo": "# Spotify",
+              "ferramentas": [
+                { "nome": "spotify_tocar", "descricao": "nova versão", "comando": "powershell" }
+              ]
+            }
+            """;
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
+        GeradorHabilidade gerador = new GeradorHabilidade(client, politica: null, RegistroCom("spotify_tocar"));
+
+        RespostaGeracao resposta = await gerador.ContinuarAsync(Historico("ajusta o spotify"));
+
+        Assert.True(Assert.Single(resposta.Rascunho!.Ferramentas).SubstituiExistente);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_descarta_proposta_sem_nome_ou_comando()
+    {
+        string json = """
+            {
+              "mensagem": "ok",
+              "pronto": true,
+              "titulo": "T",
+              "conteudo": "# T",
+              "ferramentas": [
+                { "descricao": "sem nome", "comando": "powershell" },
+                { "nome": "sem_comando", "descricao": "sem comando" },
+                { "nome": "valida", "descricao": "ok", "comando": "git" }
+              ]
+            }
+            """;
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+
+        RespostaGeracao resposta = await gerador.ContinuarAsync(Historico("cria"));
+
+        Assert.Equal("valida", Assert.Single(resposta.Rascunho!.Ferramentas).Definicao.Nome);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_sem_ferramentas_propostas_devolve_lista_vazia()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant,
+            "{\"mensagem\":\"ok\",\"pronto\":true,\"titulo\":\"T\",\"conteudo\":\"# T\"}")));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+
+        RespostaGeracao resposta = await gerador.ContinuarAsync(Historico("cria"));
+
+        Assert.Empty(resposta.Rascunho!.Ferramentas);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_orienta_a_propor_ferramenta_quando_faltar()
+    {
+        FakeChatClient client = new FakeChatClient((_, _) =>
+            new ChatResponse(new ChatMessage(ChatRole.Assistant, "{\"mensagem\":\"ok\",\"pronto\":false}")));
+        GeradorHabilidade gerador = new GeradorHabilidade(client, politica: null, RegistroCom("abrir_projeto"));
+
+        await gerador.ContinuarAsync(Historico("quero gerenciar o spotify"));
+
+        string contexto = string.Concat(
+            client.LastMessages!.Where(m => m.Role == ChatRole.System).Select(m => m.Text));
+        Assert.Contains("FERRAMENTAS novas", contexto);
+        Assert.Contains("\"ferramentas\"", contexto);
+        Assert.Contains("abrir_projeto", contexto);
     }
 
     [Fact]

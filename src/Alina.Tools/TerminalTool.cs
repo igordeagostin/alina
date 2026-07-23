@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Alina.Core.IO;
 using Alina.Core.Tools;
 using Microsoft.Extensions.AI;
 
@@ -58,7 +59,7 @@ public sealed class TerminalTool : ToolBase
             WorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
                 ? Environment.CurrentDirectory
                 : workingDirectory,
-        };
+        }.AplicarUtf8();
 
         try
         {
@@ -99,8 +100,11 @@ public sealed class TerminalTool : ToolBase
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             // Escapa aspas duplas para passar o comando como um único argumento ao PowerShell.
+            // O prefixo faz o PowerShell escrever em UTF-8 em vez da codepage do console,
+            // que é como a saída é lida deste lado.
             string escaped = command.Replace("\"", "\\\"");
-            return ("powershell.exe", $"-NoProfile -NonInteractive -Command \"{escaped}\"");
+            return ("powershell.exe",
+                $"-NoProfile -NonInteractive -Command \"[Console]::OutputEncoding=[Text.Encoding]::UTF8; {escaped}\"");
         }
 
         string bashEscaped = command.Replace("\"", "\\\"");

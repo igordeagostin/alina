@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using Alina.Core.IO;
 using Microsoft.Extensions.AI;
 
 namespace Alina.Tools.ClaudeCode;
@@ -141,7 +142,7 @@ public sealed class ClienteChatClaudeCode : IChatClient
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-        };
+        }.AplicarUtf8();
 
         if (!string.IsNullOrWhiteSpace(_opcoes.DefaultWorkingDirectory)
             && Directory.Exists(_opcoes.DefaultWorkingDirectory))

@@ -1394,6 +1394,74 @@ html, body {
     font-weight: 600;
 }
 
+/* Ferramentas propostas junto com a habilidade */
+.cat-propostas {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px dashed var(--accent-strong);
+    border-radius: 9px;
+}
+
+.cat-propostas-titulo {
+    color: var(--accent-soft);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.cat-proposta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    transition: opacity 0.15s;
+}
+
+.cat-proposta-recusada {
+    opacity: 0.5;
+}
+
+.cat-proposta-cabecalho {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.cat-proposta-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.cat-proposta-motivo {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    line-height: 1.4;
+}
+
+.cat-proposta-selo {
+    color: var(--muted);
+    font-size: 0.6875rem;
+}
+
+.cat-proposta-aviso {
+    color: var(--danger, #e5484d);
+    font-size: 0.6875rem;
+}
+
+.cat-aviso-ok {
+    display: block;
+    color: var(--accent-soft);
+    font-size: 0.75rem;
+}
+
 /* Treino: rodar a habilidade de verdade antes de corrigi-la */
 .cat-treino {
     display: flex;
