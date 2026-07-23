@@ -21,6 +21,13 @@ public interface IOrchestrator
     Task<string> SendAsync(string userText, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Igual a <see cref="SendAsync(string, CancellationToken)"/>, mas reporta cada pedaço
+    /// de texto da resposta assim que o modelo o gera — é o que permite à UI exibir a
+    /// resposta crescendo e à voz começar a falar antes de a geração terminar.
+    /// </summary>
+    Task<string> SendAsync(string userText, IProgress<string>? progressoResposta, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Anota na conversa atual um fato sobre a própria interação (ex.: "o usuário
     /// interrompeu você no meio da fala"), para que o próximo turno leve isso em conta.
     /// Não chama o LLM: só registra na memória de trabalho.

@@ -1,3 +1,4 @@
+using System.Text;
 using Alina.Core.Habilidades;
 using Alina.Core.Memory;
 using Alina.Core.Models;
@@ -75,7 +76,10 @@ public sealed class ChatOrchestrator : IOrchestrator
         return true;
     }
 
-    public async Task<string> SendAsync(string userText, CancellationToken cancellationToken = default)
+    public Task<string> SendAsync(string userText, CancellationToken cancellationToken = default)
+        => SendAsync(userText, progressoResposta: null, cancellationToken);
+
+    public async Task<string> SendAsync(string userText, IProgress<string>? progressoResposta, CancellationToken cancellationToken = default)
     {
         _current.Messages.Add(new ChatMessage(ChatRole.User, userText));
 
@@ -102,15 +106,29 @@ public sealed class ChatOrchestrator : IOrchestrator
 
         _logger.LogDebug("Enviando {Count} mensagens ao LLM ({Tools} tools).", request.Count, options.Tools.Count);
 
-        ChatResponse response = await _client.GetResponseAsync(request, options, cancellationToken);
+        // Streaming: cada pedaço de texto sai na hora para quem estiver ouvindo, e as
+        // mensagens (inclusive chamadas/resultados de tools) são reconstruídas ao final.
+        List<ChatResponseUpdate> updates = new List<ChatResponseUpdate>();
+        StringBuilder texto = new StringBuilder();
 
-        // Inclui mensagens intermediárias (chamadas/resultados de tools) e a resposta final.
-        _current.Messages.AddRange(response.Messages);
+        await foreach (ChatResponseUpdate update in _client.GetStreamingResponseAsync(request, options, cancellationToken))
+        {
+            updates.Add(update);
+
+            string pedaco = update.Text;
+            if (pedaco.Length > 0)
+            {
+                texto.Append(pedaco);
+                progressoResposta?.Report(pedaco);
+            }
+        }
+
+        _current.Messages.AddMessages(updates);
         _current.UpdatedAt = DateTimeOffset.Now;
 
         await _store.SaveAsync(_current, cancellationToken);
 
-        return response.Text;
+        return texto.ToString();
     }
 
     public void RegistrarNota(string nota)
@@ -156,9 +174,21 @@ public sealed class ChatOrchestrator : IOrchestrator
             _preferencesLoaded = true;
         }
 
-        IReadOnlyList<MemoryIndexEntry> index = await _memory.GetIndexAsync(cancellationToken);
-        IReadOnlyList<MemoryItem> pinned = await _memory.GetPinnedAsync(cancellationToken);
-        IReadOnlyList<MemoryItem> relevant = await _memory.SearchAsync(userText, TopKMemories, cancellationToken);
+        // As fontes são independentes; buscá-las juntas tira do caminho crítico o que não
+        // for o mais lento — em geral a busca semântica, que envolve uma chamada de rede.
+        Task<IReadOnlyList<MemoryIndexEntry>> indexTask = _memory.GetIndexAsync(cancellationToken);
+        Task<IReadOnlyList<MemoryItem>> pinnedTask = _memory.GetPinnedAsync(cancellationToken);
+        Task<IReadOnlyList<MemoryItem>> relevantTask = _memory.SearchAsync(userText, TopKMemories, cancellationToken);
+        Task<IReadOnlyList<HabilidadeResumo>> habilidadesTask = _habilidades.ListarAsync(cancellationToken);
+        Task<PerfilPersonalidade?> perfilTask = _personalidade is null
+            ? Task.FromResult<PerfilPersonalidade?>(null)
+            : ObterPerfilAsync(cancellationToken);
+
+        await Task.WhenAll(indexTask, pinnedTask, relevantTask, habilidadesTask, perfilTask);
+
+        IReadOnlyList<MemoryIndexEntry> index = indexTask.Result;
+        IReadOnlyList<MemoryItem> pinned = pinnedTask.Result;
+        IReadOnlyList<MemoryItem> relevant = relevantTask.Result;
 
         // Fixadas primeiro, depois relevantes, sem duplicar.
         HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -171,11 +201,8 @@ public sealed class ChatOrchestrator : IOrchestrator
             }
         }
 
-        IReadOnlyList<HabilidadeResumo> habilidades = await _habilidades.ListarAsync(cancellationToken);
-
-        PerfilPersonalidade? perfil = _personalidade is null
-            ? null
-            : await _personalidade.ObterAsync(cancellationToken);
+        IReadOnlyList<HabilidadeResumo> habilidades = habilidadesTask.Result;
+        PerfilPersonalidade? perfil = perfilTask.Result;
 
         _logger.LogDebug(
             "Memória: {Index} no índice, {Detailed} detalhadas ({Pinned} fixadas + {Relevant} relevantes); {Habilidades} habilidades.",
@@ -184,4 +211,7 @@ public sealed class ChatOrchestrator : IOrchestrator
         return SystemPromptBuilder.Build(
             _tools.Tools, _preferences, index, detailed, habilidades, _politica?.Opcoes.DiretoriosConfiaveis, perfil);
     }
+
+    private async Task<PerfilPersonalidade?> ObterPerfilAsync(CancellationToken cancellationToken)
+        => await _personalidade!.ObterAsync(cancellationToken);
 }

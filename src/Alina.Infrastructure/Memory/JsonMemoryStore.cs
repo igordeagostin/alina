@@ -15,6 +15,9 @@ public sealed class JsonMemoryStore : IMemoryStore
     private readonly string _filePath;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
+    private List<MemoryItem>? _cache;
+    private DateTime _cacheEscritaUtc;
+
     public JsonMemoryStore(string filePath)
     {
         _filePath = filePath;
@@ -79,7 +82,9 @@ public sealed class JsonMemoryStore : IMemoryStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            return await LoadAsync(cancellationToken);
+            // Cópia da lista para o chamador poder enumerar fora do semáforo sem
+            // disputar com uma escrita concorrente; os itens são compartilhados.
+            return new List<MemoryItem>(await LoadAsync(cancellationToken));
         }
         finally
         {
@@ -107,28 +112,47 @@ public sealed class JsonMemoryStore : IMemoryStore
         }
     }
 
+    /// <summary>
+    /// Lê o arquivo uma vez e reaproveita a lista enquanto ele não mudar no disco —
+    /// a data de escrita é o que invalida o cache, então edições externas ainda valem.
+    /// </summary>
     private async Task<List<MemoryItem>> LoadAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_filePath))
         {
+            _cache = null;
             return new List<MemoryItem>();
+        }
+
+        DateTime escritaUtc = File.GetLastWriteTimeUtc(_filePath);
+        if (_cache is not null && escritaUtc == _cacheEscritaUtc)
+        {
+            return _cache;
         }
 
         try
         {
             await using FileStream stream = File.OpenRead(_filePath);
             List<MemoryItem>? items = await JsonSerializer.DeserializeAsync<List<MemoryItem>>(stream, JsonOptions, cancellationToken);
-            return items ?? new List<MemoryItem>();
+            _cache = items ?? new List<MemoryItem>();
         }
         catch (JsonException)
         {
-            return new List<MemoryItem>();
+            _cache = new List<MemoryItem>();
         }
+
+        _cacheEscritaUtc = escritaUtc;
+        return _cache;
     }
 
     private async Task SaveAsync(List<MemoryItem> items, CancellationToken cancellationToken)
     {
-        await using FileStream stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, items, JsonOptions, cancellationToken);
+        await using (FileStream stream = File.Create(_filePath))
+        {
+            await JsonSerializer.SerializeAsync(stream, items, JsonOptions, cancellationToken);
+        }
+
+        _cache = items;
+        _cacheEscritaUtc = File.GetLastWriteTimeUtc(_filePath);
     }
 }

@@ -3,34 +3,87 @@ using System.Diagnostics;
 namespace Alina.Voice;
 
 /// <summary>
-/// Detecta o começo de uma fala do usuário enquanto a Alina responde, para calar a
-/// voz dela na hora (barge-in) sem cancelar o que ela está executando. Usa um limiar
-/// mais alto que o <see cref="DetectorSilencio"/> e exige som sustentado por alguns
-/// blocos: em caixas de som o microfone capta a própria voz da Alina, e sem essas duas
-/// travas ela se calaria sozinha a cada frase.
+/// Detecta que você tomou a palavra enquanto a Alina fala, para calar a voz dela na hora
+/// sem cancelar nada do que ela esteja executando.
+/// <para>
+/// Um limiar fixo não serve: de fone, o microfone só ouve você e qualquer sussurro deveria
+/// valer; em caixas de som, ele ouve a Alina alto e nada abaixo disso pode valer. Então o
+/// limiar se calibra sozinho pelo que se ouve nos primeiros instantes da fala dela — que é
+/// justamente o eco a ignorar. E o tempo de fala é acumulado, não exigido contínuo: fala
+/// humana tem vales entre as sílabas, e exigir som ininterrupto simplesmente nunca dispara.
+/// </para>
 /// </summary>
 public sealed class DetectorInicioFala
 {
-    private const float LimiarFala = 0.12f;
-    private static readonly TimeSpan FalaSustentada = TimeSpan.FromMilliseconds(280);
+    /// <summary>Piso absoluto: abaixo disso é ruído de sala, nunca fala.</summary>
+    private const float PisoMinimo = 0.02f;
 
-    private readonly Stopwatch _relogio = Stopwatch.StartNew();
+    /// <summary>Quanto a sua voz precisa se destacar do que já se ouvia para contar.</summary>
+    private const float FatorAcimaDoPiso = 1.8f;
 
-    private TimeSpan? _falandoDesde;
+    /// <summary>Trecho inicial usado só para medir o eco da voz dela, sem decidir nada.</summary>
+    private static readonly TimeSpan Calibragem = TimeSpan.FromMilliseconds(400);
 
-    /// <summary>Alimenta um nível de áudio (0–1). Retorna true quando há fala confirmada.</summary>
+    /// <summary>Tempo de voz somado que confirma que quem está falando é você.</summary>
+    private static readonly TimeSpan FalaAcumulada = TimeSpan.FromMilliseconds(220);
+
+    /// <summary>Silêncio tolerado dentro de uma fala antes de zerar a contagem.</summary>
+    private static readonly TimeSpan ToleranciaVale = TimeSpan.FromMilliseconds(180);
+
+    private readonly Func<TimeSpan> _relogio;
+
+    private float _piso = PisoMinimo;
+    private TimeSpan _acumulado;
+    private TimeSpan? _anterior;
+    private TimeSpan? _quietoDesde;
+
+    public DetectorInicioFala()
+    {
+        Stopwatch cronometro = Stopwatch.StartNew();
+        _relogio = () => cronometro.Elapsed;
+    }
+
+    /// <summary>Sobrecarga com relógio próprio: tudo aqui é decidido por tempo decorrido.</summary>
+    public DetectorInicioFala(Func<TimeSpan> relogio) => _relogio = relogio;
+
+    /// <summary>Alimenta um nível de áudio (0–1). Retorna true quando a palavra passou a ser sua.</summary>
     public bool Alimentar(float nivel)
     {
-        if (nivel < LimiarFala)
+        TimeSpan agora = _relogio();
+        TimeSpan intervalo = _anterior is null ? TimeSpan.Zero : agora - _anterior.Value;
+        _anterior = agora;
+
+        if (agora < Calibragem)
         {
-            _falandoDesde = null;
+            _piso = Math.Max(_piso, nivel);
             return false;
         }
 
-        TimeSpan agora = _relogio.Elapsed;
-        _falandoDesde ??= agora;
-        return agora - _falandoDesde.Value >= FalaSustentada;
+        float limiar = Math.Max(PisoMinimo, _piso * FatorAcimaDoPiso);
+
+        if (nivel >= limiar)
+        {
+            _quietoDesde = null;
+            _acumulado += intervalo;
+            return _acumulado >= FalaAcumulada;
+        }
+
+        // Fora da fala, o piso acompanha o eco: sobe na hora se ele aumentar e cede devagar
+        // quando ele diminui, para a calibragem não ficar presa a um estalo do começo.
+        _piso = Math.Max(_piso * 0.995f, nivel);
+
+        _quietoDesde ??= agora;
+        if (agora - _quietoDesde.Value >= ToleranciaVale)
+        {
+            _acumulado = TimeSpan.Zero;
+        }
+
+        return false;
     }
 
-    public void Reiniciar() => _falandoDesde = null;
+    public void Reiniciar()
+    {
+        _acumulado = TimeSpan.Zero;
+        _quietoDesde = null;
+    }
 }

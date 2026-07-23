@@ -12,9 +12,10 @@ namespace Alina.App.Services;
 /// acionada pelo clique no orbe, pela hotkey global ou pela palavra de ativação.
 /// <para>
 /// A conversa não é feita de turnos que se esperam: aberta a sessão, dois laços rodam
-/// juntos — um só ouve, o outro só responde. Falar enquanto a Alina trabalha não cancela
-/// nada; a fala entra na fila e é atendida em seguida, e quando ela está falando a voz
-/// cala na hora para você ter a palavra. O que ela colocou para rodar em paralelo segue
+/// juntos — um só ouve, o outro só responde. O microfone nunca fecha, nem enquanto ela
+/// fala: o que você disser por cima é gravado e transcrito como qualquer outra fala, e a
+/// voz dela sai depois no texto, pelo <see cref="FiltroEco"/>. Falar não cancela nada —
+/// cala a voz dela e entra na fila. O que ela colocou para rodar em paralelo segue
 /// rodando, e o resultado volta sozinho na primeira brecha da conversa. Só um pedido
 /// explícito de parar (<see cref="VoiceOptions.PalavrasInterrupcao"/>) cancela trabalho.
 /// </para>
@@ -53,6 +54,21 @@ public sealed class VoiceController
     private CancellationTokenSource? _fala;
     private volatile bool _emConversaVoz;
     private bool _atendendoTexto;
+
+    /// <summary>
+    /// Há áudio da Alina saindo pelos alto-falantes NESTE instante. É o sinal que o
+    /// microfone usa para tratar o que capta como eco/barge-in — o estado visível não
+    /// serve para isso, porque com a resposta em streaming ela fala enquanto pensa e
+    /// executa ferramentas, e o estado mostra essas outras fases.
+    /// </summary>
+    private volatile bool _reproduzindoAudio;
+
+    /// <summary>
+    /// O que a Alina está dizendo (ou acabou de dizer) em voz alta. É a referência que
+    /// permite reconhecer a própria voz dela quando ela volta pelo microfone. Fica de pé
+    /// até a fala seguinte começar, porque o eco do último bloco ainda chega depois.
+    /// </summary>
+    private volatile string? _falaEmCurso;
 
     /// <summary>Amplitude do microfone (0–1) durante a gravação, para a waveform.</summary>
     public event Action<float>? NivelAudio;
@@ -189,12 +205,6 @@ public sealed class VoiceController
                 break;
             }
 
-            if (captura.SobreAVozDela)
-            {
-                primeira = false;
-                continue;
-            }
-
             if (!captura.HouveFala)
             {
                 if (primeira)
@@ -213,7 +223,7 @@ public sealed class VoiceController
             }
 
             primeira = false;
-            _falas.Writer.TryWrite(TranscreverAsync(captura.Wav, sessao));
+            _falas.Writer.TryWrite(TranscreverAsync(captura, sessao));
         }
 
         _falas.Writer.TryComplete();
@@ -227,11 +237,11 @@ public sealed class VoiceController
         !PodeInterromper && _falas.Reader.Count == 0 && _avisos.Reader.Count == 0;
 
     /// <summary>
-    /// Grava até o fim da fala. Enquanto a Alina responde, o microfone capta a voz dela, e
-    /// esse áudio não presta: seria a Alina transcrevendo a si mesma. Nesse trecho a gravação
-    /// vira uma sentinela que nada aproveita e só vigia se você tomou a palavra — se tomou,
-    /// a voz dela cala. Assim que ela se cala, por corte ou por ter chegado ao fim, a
-    /// sentinela é fechada e uma gravação limpa começa, pronta para a sua resposta.
+    /// Grava até o fim da fala — inclusive enquanto a Alina responde, que é quando o
+    /// microfone ouve as duas vozes. Esse áudio não é jogado fora: ele é transcrito como
+    /// qualquer outro e o eco da voz dela sai depois, no texto, comparando com o que ela
+    /// estava dizendo. Confirmada a sua voz, a fala dela cala na hora e a gravação fecha
+    /// para o que você disse ser atendido logo, sem esperar ela terminar.
     /// </summary>
     private async Task<Captura> GravarAsync(VoiceOptions opcoes, CancellationToken sessao)
     {
@@ -243,15 +253,15 @@ public sealed class VoiceController
             TimeSpan.FromSeconds(opcoes.SegundosJanelaConversa));
         DetectorInicioFala inicio = new DetectorInicioFala();
 
-        bool sobreAVozDela = false;
+        bool falavaAoGravar = false;
 
         ProgressoSincrono nivel = new ProgressoSincrono(v =>
         {
             NivelAudio?.Invoke(v);
 
-            if (_status.Current == AssistantState.Speaking)
+            if (_reproduzindoAudio || _status.Current == AssistantState.Speaking)
             {
-                sobreAVozDela = true;
+                falavaAoGravar = true;
 
                 if (opcoes.InterromperPorVoz && inicio.Alimentar(v))
                 {
@@ -262,7 +272,9 @@ public sealed class VoiceController
                 return;
             }
 
-            if (sobreAVozDela)
+            // Ela acabou de se calar: fecha aqui para transcrever já o que foi dito por cima,
+            // em vez de deixar a gravação correr até a próxima janela de silêncio.
+            if (falavaAoGravar)
             {
                 _pararGravacao?.TrySetResult();
                 return;
@@ -278,14 +290,18 @@ public sealed class VoiceController
 
         byte[] wav = await _recorder!.RecordAsync(_ => _pararGravacao.Task, nivel);
 
-        return new Captura(wav, silencio.Falou && !sessao.IsCancellationRequested, sobreAVozDela);
+        bool houveFala = (silencio.Falou || falavaAoGravar) && !sessao.IsCancellationRequested;
+
+        return new Captura(wav, houveFala, falavaAoGravar ? _falaEmCurso : null);
     }
 
-    private async Task<Fala> TranscreverAsync(byte[] wav, CancellationToken sessao)
+    private async Task<Fala> TranscreverAsync(Captura captura, CancellationToken sessao)
     {
         try
         {
-            return new Fala(await _stt!.TranscribeAsync(wav, sessao), JaNoLog: false);
+            string texto = await _stt!.TranscribeAsync(captura.Wav, sessao);
+
+            return new Fala(FiltroEco.RemoverEco(texto, captura.EcoDe), JaNoLog: false);
         }
         catch (OperationCanceledException)
         {
@@ -612,10 +628,48 @@ public sealed class VoiceController
         }
     }
 
+    /// <summary>
+    /// Atende um pedido com a resposta em streaming: o texto aparece no chat enquanto o
+    /// modelo o gera e, no modo voz, cada frase completa já vai para a síntese — a Alina
+    /// começa a falar a primeira frase com o resto da resposta ainda saindo. Ser cortada
+    /// (<see cref="_fala"/>) cala a voz e nada mais: a geração segue até o fim para o
+    /// texto ficar completo no chat e no histórico.
+    /// </summary>
     private async Task ResponderAsync(string texto, bool comVoz, CancellationToken sessao)
     {
         using CancellationTokenSource trabalho = CancellationTokenSource.CreateLinkedTokenSource(sessao);
         _trabalho = trabalho;
+
+        bool falar = comVoz && _services.GetRequiredService<VoiceOptions>().Enabled;
+
+        using CancellationTokenSource fala = CancellationTokenSource.CreateLinkedTokenSource(sessao);
+        Channel<string> blocos = Channel.CreateUnbounded<string>();
+        DivisorFalaIncremental divisor = new DivisorFalaIncremental();
+        StringBuilder ouvido = new StringBuilder();
+        StringBuilder acumulado = new StringBuilder();
+        Task? reproducao = null;
+
+        if (falar)
+        {
+            _fala = fala;
+            reproducao = ReproduzirFalaAsync(blocos.Reader, ouvido, fala.Token);
+        }
+
+        ProgressoTexto progresso = new ProgressoTexto(pedaco =>
+        {
+            acumulado.Append(pedaco);
+            string textoAtual = acumulado.ToString();
+            _log.AtualizarParcial(textoAtual);
+
+            if (falar)
+            {
+                _falaEmCurso = textoAtual;
+                foreach (string frase in divisor.Alimentar(pedaco))
+                {
+                    blocos.Writer.TryWrite(frase);
+                }
+            }
+        });
 
         try
         {
@@ -625,10 +679,11 @@ public sealed class VoiceController
             string resposta;
             try
             {
-                resposta = await _orchestrator.SendAsync(texto, trabalho.Token);
+                resposta = await _orchestrator.SendAsync(texto, progresso, trabalho.Token);
             }
             catch (OperationCanceledException)
             {
+                _log.ConcluirParcial();
                 if (sessao.IsCancellationRequested)
                 {
                     return;
@@ -640,67 +695,113 @@ public sealed class VoiceController
             }
             catch (Exception ex)
             {
+                _log.ConcluirParcial();
                 _log.Adicionar("error", $"[erro] {ex.Message}");
                 return;
             }
 
             resposta = string.IsNullOrWhiteSpace(resposta) ? "(sem resposta)" : resposta;
-            _log.Adicionar("bot", resposta);
 
-            if (comVoz && _services.GetRequiredService<VoiceOptions>().Enabled)
+            if (_log.ParcialAtiva)
             {
-                await FalarAsync(resposta, sessao);
+                _log.ConcluirParcial(resposta);
+            }
+            else
+            {
+                _log.Adicionar("bot", resposta);
+            }
+
+            if (falar)
+            {
+                foreach (string frase in divisor.Concluir())
+                {
+                    blocos.Writer.TryWrite(frase);
+                }
+
+                blocos.Writer.TryComplete();
+                await reproducao!;
+
+                if (fala.IsCancellationRequested && !sessao.IsCancellationRequested)
+                {
+                    _orchestrator.RegistrarNota(MontarNotaFalaCortada(ouvido.ToString().Trim()));
+                }
             }
         }
         finally
         {
+            blocos.Writer.TryComplete();
+            fala.Cancel();
+            if (reproducao is not null)
+            {
+                await reproducao;
+            }
+
+            _fala = null;
             _trabalho = null;
             MarcarOcioso();
         }
     }
 
     /// <summary>
-    /// Fala a resposta em blocos curtos, sintetizando o próximo enquanto o atual toca.
-    /// Além de começar a falar bem antes, é o que torna o barge-in instantâneo: só existe
-    /// um bloco em reprodução por vez. Ser cortado aqui cala a voz e nada mais — o que
-    /// estiver em execução segue seu curso.
+    /// Consome as frases enfileiradas pelo streaming e as reproduz em ordem, sintetizando
+    /// a próxima enquanto a atual toca. Só existe um trecho em reprodução por vez — é o
+    /// que torna o barge-in instantâneo. Ser cortado aqui cala a voz e nada mais.
     /// </summary>
-    private async Task FalarAsync(string resposta, CancellationToken sessao)
+    private async Task ReproduzirFalaAsync(ChannelReader<string> blocos, StringBuilder ouvido, CancellationToken fala)
     {
-        IReadOnlyList<string> blocos = DivisorFala.Dividir(resposta);
-        if (blocos.Count == 0)
-        {
-            return;
-        }
-
-        using CancellationTokenSource fala = CancellationTokenSource.CreateLinkedTokenSource(sessao);
-        _fala = fala;
-
-        _status.Set(AssistantState.Speaking);
         _tts ??= _services.GetRequiredService<ITextToSpeech>();
         _player ??= _services.GetRequiredService<IAudioPlayer>();
 
-        StringBuilder ouvido = new StringBuilder();
-        Task<byte[]>? proximo = null;
+        // Token próprio: um erro na reprodução precisa soltar o produtor (que pode estar
+        // aguardando vaga no canal) mesmo sem o pedido de calar a voz ter sido feito.
+        using CancellationTokenSource interna = CancellationTokenSource.CreateLinkedTokenSource(fala);
+
+        Channel<(string Bloco, Task<byte[]> Audio)> sinteses =
+            Channel.CreateBounded<(string Bloco, Task<byte[]> Audio)>(1);
+
+        Task producao = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (string bloco in blocos.ReadAllAsync(interna.Token))
+                {
+                    Task<byte[]> audio = _tts.SynthesizeAsync(bloco, interna.Token);
+                    Descartar(audio);
+                    await sinteses.Writer.WriteAsync((bloco, audio), interna.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                sinteses.Writer.TryComplete();
+            }
+        }, CancellationToken.None);
 
         try
         {
-            for (int i = 0; i < blocos.Count; i++)
+            await foreach ((string bloco, Task<byte[]> audio) in sinteses.Reader.ReadAllAsync(fala))
             {
-                Task<byte[]> atual = proximo ?? _tts.SynthesizeAsync(blocos[i], fala.Token);
-                byte[] audio = await atual;
+                byte[] mp3 = await audio;
 
-                proximo = i + 1 < blocos.Count
-                    ? _tts.SynthesizeAsync(blocos[i + 1], fala.Token)
-                    : null;
+                _status.Set(AssistantState.Speaking);
+                _reproduzindoAudio = true;
+                try
+                {
+                    await _player.PlayMp3Async(mp3, fala);
+                }
+                finally
+                {
+                    _reproduzindoAudio = false;
+                }
 
-                await _player.PlayMp3Async(audio, fala.Token);
                 if (fala.IsCancellationRequested)
                 {
                     break;
                 }
 
-                ouvido.Append(blocos[i]).Append(' ');
+                ouvido.Append(bloco).Append(' ');
             }
         }
         catch (OperationCanceledException)
@@ -712,13 +813,8 @@ public sealed class VoiceController
         }
         finally
         {
-            Descartar(proximo);
-            _fala = null;
-        }
-
-        if (fala.IsCancellationRequested && !sessao.IsCancellationRequested)
-        {
-            _orchestrator!.RegistrarNota(MontarNotaFalaCortada(ouvido.ToString().Trim()));
+            interna.Cancel();
+            await producao;
         }
     }
 
@@ -773,7 +869,11 @@ public sealed class VoiceController
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
 
-    private sealed record Captura(byte[] Wav, bool HouveFala, bool SobreAVozDela);
+    /// <summary>
+    /// Um trecho gravado. <paramref name="EcoDe"/> traz o que a Alina estava falando durante
+    /// a gravação, quando havia — é contra esse texto que a voz dela é reconhecida e removida.
+    /// </summary>
+    private sealed record Captura(byte[] Wav, bool HouveFala, string? EcoDe);
 
     /// <summary>Uma entrada na fila. O que veio digitado já foi ao chat e não é registrado de novo.</summary>
     private sealed record Fala(string Texto, bool JaNoLog)
@@ -791,5 +891,18 @@ public sealed class VoiceController
         public ProgressoSincrono(Action<float> acao) => _acao = acao;
 
         public void Report(float value) => _acao(value);
+    }
+
+    /// <summary>
+    /// Entrega cada pedaço da resposta de forma síncrona e em ordem — um <see cref="Progress{T}"/>
+    /// comum despacharia para outra thread e poderia embaralhar os pedaços.
+    /// </summary>
+    private sealed class ProgressoTexto : IProgress<string>
+    {
+        private readonly Action<string> _acao;
+
+        public ProgressoTexto(Action<string> acao) => _acao = acao;
+
+        public void Report(string value) => _acao(value);
     }
 }

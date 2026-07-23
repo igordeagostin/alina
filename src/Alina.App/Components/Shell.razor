@@ -50,7 +50,7 @@
         {
             <div class="msg msg-@m.Tipo">@m.Texto</div>
         }
-        @if (Status.Current == AssistantState.Thinking)
+        @if (Status.Current == AssistantState.Thinking && !Log.ParcialAtiva)
         {
             <div class="msg msg-bot msg-pending">pensando…</div>
         }
@@ -744,6 +744,7 @@
             AbrirEmModoCompacto = Config.Atual.AbrirEmModoCompacto,
             FalarRespostas = Config.Atual.FalarRespostas,
             EscutarPalavraAtivacao = Config.Atual.EscutarPalavraAtivacao,
+            ModeloTranscricao = Config.Atual.ModeloTranscricao,
             Voz = Config.Atual.Voz,
             VelocidadeFala = Config.Atual.VelocidadeFala,
             SegundosSilencioParaEncerrar = Config.Atual.SegundosSilencioParaEncerrar,
