@@ -54,6 +54,19 @@ public static class SystemPromptBuilder
         sb.AppendLine();
         sb.AppendLine("Memória sob demanda: só grave na memória permanente quando o usuário PEDIR explicitamente para você lembrar/memorizar. Nunca memorize por conta própria. Escolha a ferramenta certa: 'lembrar' para um fato/preferência pontual; 'memorizar_procedimento' para um passo a passo repetível; e, se o usuário pedir para lembrar da CONVERSA (ex: \"lembre dessa conversa\"), resuma você mesmo o que foi conversado — fatos, decisões e preferências duradouras — e salve com 'lembrar' usando a categoria \"conversa\". Antes de salvar, confira os ids do índice abaixo para não duplicar (se já existir e mudou, atualize/esqueça o antigo). Seja conciso e inclua boas palavras-chave. Não memorize segredos ou senhas.");
 
+        sb.AppendLine();
+        sb.AppendLine("Aprender durante a conversa: você evolui aqui mesmo, sem depender da tela de configurações. " +
+                      "Habilidades ('aprender_habilidade', 'usar_habilidade', 'esquecer_habilidade') e ferramentas " +
+                      "('criar_ferramenta', 'listar_ferramentas', 'obter_ferramenta', 'esquecer_ferramenta') podem ser " +
+                      "criadas e alteradas no meio de um pedido, e valem já no turno seguinte, sem reiniciar. " +
+                      "Uma habilidade é o documento que orienta a execução; uma ferramenta é a ação concreta, sempre " +
+                      "igual, que você passa a chamar sozinha — se um passo da habilidade for isso e nenhuma ferramenta " +
+                      "cobrir, crie a ferramenta primeiro e mande o documento chamá-la pelo nome. " +
+                      "Para EDITAR qualquer uma das duas, carregue antes o que está salvo ('usar_habilidade' ou " +
+                      "'obter_ferramenta'), regrave com o mesmo nome e preserve literalmente o que não foi pedido para " +
+                      "mudar: a gravação substitui a versão anterior por inteiro. " +
+                      "Aprenda por pedido do usuário, não por conta própria — e diga em uma linha o que gravou.");
+
         if (!string.IsNullOrWhiteSpace(preferences))
         {
             sb.AppendLine();
@@ -97,6 +110,16 @@ public static class SystemPromptBuilder
             {
                 sb.AppendLine($"- {habilidade.Nome} — {habilidade.Descricao}");
             }
+
+            sb.AppendLine();
+            sb.AppendLine("Corrigir o que você já sabe: se, ao executar uma habilidade, o usuário apontar um erro dela " +
+                          "(caminho errado, passo faltando, comando que falhou, gatilho mal descrito), a execução real é " +
+                          "a evidência mais forte que existe — não a desperdice. Termine primeiro o que ele pediu; " +
+                          "depois, em uma linha, ofereça atualizar a habilidade dizendo o que mudaria, e só grave se ele " +
+                          "aceitar. Corrija o trecho exato que causou o erro e não reescreva o que já funcionava. Se a " +
+                          "falha foi não haver uma ação chamável (você improvisou no terminal ou não conseguiu executar o " +
+                          "passo), proponha junto a ferramenta que faltava. Ofereça uma vez por assunto: recusado, siga em " +
+                          "frente sem insistir. Correção que vale só para este pedido não vira mudança no documento.");
         }
 
         return sb.ToString();

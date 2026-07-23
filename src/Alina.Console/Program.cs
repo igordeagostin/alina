@@ -94,8 +94,10 @@ builder.Services.AddSingleton<ITool, AprenderHabilidadeTool>();
 builder.Services.AddSingleton<ITool, UsarHabilidadeTool>();
 builder.Services.AddSingleton<ITool, EsquecerHabilidadeTool>();
 
-// Tools de ferramentas declarativas (criar/esquecer). O store e o provider vêm de AddAlina.
+// Tools de ferramentas declarativas (criar/listar/obter/esquecer). O store e o provider vêm de AddAlina.
 builder.Services.AddSingleton<ITool, CriarFerramentaTool>();
+builder.Services.AddSingleton<ITool, ListarFerramentasTool>();
+builder.Services.AddSingleton<ITool, ObterFerramentaTool>();
 builder.Services.AddSingleton<ITool, EsquecerFerramentaTool>();
 
 // Voz (Fase 2) — STT/TTS OpenAI + captura/reprodução NAudio

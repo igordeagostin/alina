@@ -115,24 +115,13 @@ internal sealed class FuncaoFerramenta : AIFunction
             " Informe o caminho absoluto de uma pasta que EXISTE no disco — confirme antes com 'localizar_projeto' ou 'listar_diretorio'; nome de projeto não serve.",
         TipoParametroFerramenta.Arquivo => parametro.Descricao +
             " Informe o caminho absoluto de um arquivo que EXISTE no disco.",
+        TipoParametroFerramenta.Url => parametro.Descricao +
+            " Informe o endereço completo, começando com http:// ou https://.",
         _ => parametro.Descricao,
     };
 
     private static string Substituir(string? modelo, IReadOnlyDictionary<string, string> valores)
-    {
-        if (string.IsNullOrEmpty(modelo))
-        {
-            return string.Empty;
-        }
-
-        string resultado = modelo;
-        foreach ((string chave, string valor) in valores)
-        {
-            resultado = resultado.Replace("{" + chave + "}", valor, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return resultado;
-    }
+        => SubstituidorPlaceholder.Aplicar(modelo, valores);
 
     private static string ComoTexto(object? bruto) => bruto switch
     {

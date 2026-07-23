@@ -62,9 +62,9 @@ public sealed class FileHabilidadeStoreTests : IDisposable
 
         IReadOnlyList<HabilidadeResumo> indice = await store.ListarAsync();
 
-        Assert.Equal(2, indice.Count);
-        Assert.Equal("alfa", indice[0].Nome);
-        Assert.Equal("zelda", indice[1].Nome);
+        string[] nomes = indice.Select(r => r.Nome).ToArray();
+        Assert.Equal(nomes.OrderBy(n => n, StringComparer.OrdinalIgnoreCase), nomes);
+        Assert.True(Array.IndexOf(nomes, "alfa") < Array.IndexOf(nomes, "zelda"));
     }
 
     [Fact]

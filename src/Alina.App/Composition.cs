@@ -166,9 +166,11 @@ public static class Composition
                 sp.GetRequiredService<IPoliticaPermissao>(),
                 sp.GetRequiredService<ToolRegistry>()));
 
-        // Ferramentas declarativas: tools de criar/esquecer + gerador conversacional.
+        // Ferramentas declarativas: tools de criar/listar/obter/esquecer + gerador conversacional.
         // O store e o provider vêm de AddAlina.
         builder.Services.AddSingleton<ITool, CriarFerramentaTool>();
+        builder.Services.AddSingleton<ITool, ListarFerramentasTool>();
+        builder.Services.AddSingleton<ITool, ObterFerramentaTool>();
         builder.Services.AddSingleton<ITool, EsquecerFerramentaTool>();
         builder.Services.AddSingleton<IGeradorFerramenta>(sp =>
             new GeradorFerramenta(

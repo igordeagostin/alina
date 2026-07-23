@@ -18,7 +18,12 @@ public sealed class FileHabilidadeStore : IHabilidadeStore
     public FileHabilidadeStore(string diretorio)
     {
         _diretorio = diretorio;
+        bool nova = !Directory.Exists(_diretorio);
         Directory.CreateDirectory(_diretorio);
+        if (nova)
+        {
+            Semear();
+        }
     }
 
     public FileHabilidadeStore(StorageOptions options)
@@ -114,6 +119,21 @@ public sealed class FileHabilidadeStore : IHabilidadeStore
         => Task.FromResult(File.Exists(CaminhoDe(nome)));
 
     private string CaminhoDe(string nome) => Path.Combine(_diretorio, Slugificar(nome) + ".md");
+
+    private void Semear()
+    {
+        foreach (Habilidade habilidade in HabilidadesPadrao.Todas())
+        {
+            string slug = Slugificar(habilidade.Nome);
+            if (slug.Length == 0)
+            {
+                continue;
+            }
+
+            habilidade.Nome = slug;
+            File.WriteAllText(Path.Combine(_diretorio, slug + ".md"), Serializar(habilidade));
+        }
+    }
 
     private static async Task<Habilidade?> LerArquivoAsync(string caminho, CancellationToken cancellationToken)
     {

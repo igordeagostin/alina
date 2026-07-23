@@ -21,4 +21,11 @@ public enum TipoParametroFerramenta
 
     /// <summary>Arquivo que precisa existir no disco no momento da chamada.</summary>
     Arquivo,
+
+    /// <summary>
+    /// Endereço <c>http</c>/<c>https</c> bem formado. Recusa outros esquemas
+    /// (<c>file:</c>, <c>javascript:</c>) e valores que carreguem metacaracteres de shell,
+    /// que num lançador como <c>cmd /c start</c> virariam comando.
+    /// </summary>
+    Url,
 }

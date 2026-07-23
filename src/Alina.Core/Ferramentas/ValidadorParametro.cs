@@ -18,6 +18,13 @@ internal static class ValidadorParametro
         "arquivo", "file", "script", "solucao", "solução",
     };
 
+    private static readonly HashSet<string> NomesDeUrl = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "url", "uri", "link", "endereco", "endereço", "site", "pagina", "página",
+    };
+
+    private static readonly char[] MetacaracteresDeShell = ['&', '|', '<', '>', '^', '"', '\'', '`', '\n', '\r'];
+
     /// <summary>Tipo realmente aplicado — resolve <see cref="TipoParametroFerramenta.Automatico"/> pelo nome.</summary>
     public static TipoParametroFerramenta TipoEfetivo(ParametroFerramenta parametro)
         => parametro.Tipo == TipoParametroFerramenta.Automatico ? Inferir(parametro.Nome) : parametro.Tipo;
@@ -30,6 +37,11 @@ internal static class ValidadorParametro
         if (tipo == TipoParametroFerramenta.Texto || string.IsNullOrWhiteSpace(valor))
         {
             return null;
+        }
+
+        if (tipo == TipoParametroFerramenta.Url)
+        {
+            return ValidarUrl(parametro, valor);
         }
 
         string alvo = Resolver(valor, diretorioTrabalho);
@@ -63,11 +75,36 @@ internal static class ValidadorParametro
         return null;
     }
 
+    private static string? ValidarUrl(ParametroFerramenta parametro, string valor)
+    {
+        string limpo = valor.Trim().Trim('"');
+
+        if (limpo.IndexOfAny(MetacaracteresDeShell) >= 0)
+        {
+            return $"Erro: o parâmetro '{parametro.Nome}' recebeu \"{valor}\", que contém caracteres não permitidos " +
+                "em um endereço. Nada foi executado. Codifique-os na URL (ex.: '&' vira '%26') e chame de novo.";
+        }
+
+        if (!Uri.TryCreate(limpo, UriKind.Absolute, out Uri? uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return $"Erro: o parâmetro '{parametro.Nome}' recebeu \"{valor}\", que não é um endereço http/https " +
+                "completo. Nada foi executado. Informe a URL inteira, começando com https://, e chame de novo.";
+        }
+
+        return null;
+    }
+
     private static TipoParametroFerramenta Inferir(string nome)
     {
         if (NomesDeDiretorio.Contains(nome))
         {
             return TipoParametroFerramenta.Diretorio;
+        }
+
+        if (NomesDeUrl.Contains(nome))
+        {
+            return TipoParametroFerramenta.Url;
         }
 
         return NomesDeArquivo.Contains(nome) ? TipoParametroFerramenta.Arquivo : TipoParametroFerramenta.Texto;

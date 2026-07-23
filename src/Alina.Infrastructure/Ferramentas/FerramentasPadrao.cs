@@ -35,6 +35,71 @@ internal static class FerramentasPadrao
 
         yield return new DefinicaoFerramenta
         {
+            Nome = "abrir_url",
+            Descricao =
+                "Abre um endereço no navegador padrão do usuário. Informe a URL completa (https://...). " +
+                "Use para atender pedidos como \"abra o site X\", \"abra meu e-mail\" ou para qualquer página " +
+                "cujo endereço você saiba montar — inclusive buscas em sites específicos.",
+            ExigeConfirmacao = false,
+            Comando = "cmd",
+            Argumentos = ["/c", "start", string.Empty, "{url}"],
+            Parametros =
+            [
+                new ParametroFerramenta
+                {
+                    Nome = "url",
+                    Descricao = "Endereço completo a abrir.",
+                    Obrigatorio = true,
+                    Tipo = TipoParametroFerramenta.Url,
+                },
+            ],
+        };
+
+        yield return new DefinicaoFerramenta
+        {
+            Nome = "pesquisar_google",
+            Descricao =
+                "Abre uma pesquisa do Google no navegador, já com o termo preenchido. Apenas ABRE a busca para " +
+                "o usuário ver — não devolve os resultados para você. Se precisar LER o conteúdo da web para " +
+                "responder algo, delegue ao Claude Code em vez desta ferramenta.",
+            ExigeConfirmacao = false,
+            Comando = "cmd",
+            Argumentos = ["/c", "start", string.Empty, "https://www.google.com/search?q={termo:url}"],
+            Parametros =
+            [
+                new ParametroFerramenta
+                {
+                    Nome = "termo",
+                    Descricao = "O que pesquisar, em texto livre.",
+                    Obrigatorio = true,
+                    Tipo = TipoParametroFerramenta.Texto,
+                },
+            ],
+        };
+
+        yield return new DefinicaoFerramenta
+        {
+            Nome = "pesquisar_youtube",
+            Descricao =
+                "Abre a busca do YouTube no navegador, já com o termo preenchido. Use para pedidos como " +
+                "\"procure X no YouTube\". Apenas abre a página de resultados; não toca o vídeo sozinho.",
+            ExigeConfirmacao = false,
+            Comando = "cmd",
+            Argumentos = ["/c", "start", string.Empty, "https://www.youtube.com/results?search_query={termo:url}"],
+            Parametros =
+            [
+                new ParametroFerramenta
+                {
+                    Nome = "termo",
+                    Descricao = "O que procurar no YouTube.",
+                    Obrigatorio = true,
+                    Tipo = TipoParametroFerramenta.Texto,
+                },
+            ],
+        };
+
+        yield return new DefinicaoFerramenta
+        {
             Nome = "saudar",
             Descricao = "Ferramenta de exemplo: exibe uma saudação personalizada. Edite ou remova à vontade.",
             ExigeConfirmacao = true,

@@ -27,12 +27,14 @@ public sealed class CriarFerramentaTool : ToolBase
     public override string Name => "criar_ferramenta";
 
     public override string Description =>
-        "Cria uma nova ferramenta declarativa (um comando externo que você passará a poder chamar), a partir de " +
-        "um JSON. Use quando o usuário pedir para você CRIAR/APRENDER uma ferramenta ou automatizar um comando " +
-        "recorrente. A ferramenta fica disponível logo em seguida, sem reiniciar o app. " +
-        "O JSON tem os campos: nome (snake_case), descricao, comando (executável), argumentos (array de strings, " +
-        "podendo conter {placeholders}), exigeConfirmacao (bool; use false só para ações seguras, o que dispensa o " +
-        "SIM/NÃO), e parametros (array de { nome, descricao, obrigatorio } — um por placeholder).";
+        "Cria ou atualiza uma ferramenta declarativa (um comando externo que você passará a poder chamar), a " +
+        "partir de um JSON. Use quando o usuário pedir para você CRIAR/APRENDER uma ferramenta ou automatizar " +
+        "um comando recorrente. A ferramenta fica disponível logo em seguida, sem reiniciar o app. " +
+        "Salvar com o nome de uma ferramenta existente SUBSTITUI a definição inteira: para editar uma, chame " +
+        "antes 'obter_ferramenta' e devolva o JSON completo com os campos que não mudam preservados.\n\n" +
+        "Campos do JSON:\n" +
+        RegrasFerramenta.Campos + "\n\n" +
+        RegrasFerramenta.Regras;
 
     public override bool RequiresConfirmation => false;
 

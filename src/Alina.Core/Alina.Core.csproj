@@ -10,4 +10,8 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.8.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Alina.Tests" />
+  </ItemGroup>
+
 </Project>
