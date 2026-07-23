@@ -45,6 +45,14 @@ public sealed class ClaudeCodeOptions
     /// </summary>
     public bool Streaming { get; set; } = true;
 
+    /// <summary>
+    /// Esforço de raciocínio (<c>--effort</c>) dos papéis que só redigem texto — gerar
+    /// habilidades e ferramentas, via <see cref="ClienteChatClaudeCode"/>. O padrão do CLI
+    /// gastava dezenas de segundos raciocinando antes da primeira letra sem melhorar o
+    /// documento, então aqui o padrão é "low".
+    /// </summary>
+    public string EsforcoTexto { get; set; } = "low";
+
     /// <summary>Tempo máximo de execução em segundos (tarefas de código podem demorar).</summary>
     public int TimeoutSeconds { get; set; } = 600;
 

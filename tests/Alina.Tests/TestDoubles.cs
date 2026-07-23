@@ -42,9 +42,19 @@ public sealed class FakeChatClient : IChatClient
         return Task.FromResult(_handler(list, options));
     }
 
-    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-        IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
+    /// <summary>Entrega a mesma resposta do modo normal, mas fatiada, como faria um modelo de verdade.</summary>
+    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ChatResponse resposta = await GetResponseAsync(messages, options, cancellationToken);
+        string texto = resposta.Text ?? string.Empty;
+
+        for (int i = 0; i < texto.Length; i += 7)
+        {
+            yield return new ChatResponseUpdate(ChatRole.Assistant, texto[i..Math.Min(i + 7, texto.Length)]);
+        }
+    }
 
     public object? GetService(Type serviceType, object? serviceKey = null) => null;
 

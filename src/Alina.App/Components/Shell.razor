@@ -248,6 +248,19 @@
 
                     <div class="cfg-card">
                         <div class="cfg-row cfg-row-empilhado">
+                            <span class="cfg-row-titulo">Esforço de raciocínio (texto)</span>
+                            <select class="cfg-campo" @bind="_esforcoClaudeCode">
+                                @foreach (EsforcoClaudeCode e in ConfigClaudeCode.EsforcosDisponiveis)
+                                {
+                                    <option value="@e.Id">@e.Rotulo@(string.IsNullOrEmpty(e.Nota) ? "" : $" — {e.Nota}")</option>
+                                }
+                            </select>
+                            <span class="cfg-row-sub">Quanto o Claude Code pensa antes de escrever nos papéis que só redigem texto — criar habilidades e ferramentas. Esforço alto pode gastar dezenas de segundos raciocinando antes da primeira letra sem melhorar o documento; por isso o padrão é baixo.</span>
+                        </div>
+                    </div>
+
+                    <div class="cfg-card">
+                        <div class="cfg-row cfg-row-empilhado">
                             <span class="cfg-row-titulo">Chave da API OpenAI</span>
                             <input type="password" class="cfg-campo" @bind="_chaveOpenAi"
                                    placeholder="@(ConfigLlm.ChaveOpenAiDefinida ? "•••••••• (definida — deixe em branco para manter)" : "sk-…")" />
@@ -522,6 +535,7 @@
     private bool _iniciarComWindows;
     private readonly Dictionary<PapelLlm, string> _selecaoPapel = [];
     private string _modeloClaudeCode = string.Empty;
+    private string _esforcoClaudeCode = string.Empty;
     private string _chaveOpenAi = string.Empty;
     private PoliticaPermissaoOptions _permOpcoes = new();
     private string _novoDiretorio = string.Empty;
@@ -732,6 +746,7 @@
         }
 
         _modeloClaudeCode = ConfigClaudeCode.ModeloAtual;
+        _esforcoClaudeCode = ConfigClaudeCode.EsforcoTextoAtual;
         _chaveOpenAi = string.Empty;
         _permOpcoes = ClonarOpcoes(Politica.Opcoes);
         _novoDiretorio = string.Empty;
@@ -825,7 +840,7 @@
         Config.Salvar(_edicao);
         Politica.AtualizarOpcoes(_permOpcoes);
         SalvarLlm();
-        ConfigClaudeCode.Salvar(_modeloClaudeCode);
+        ConfigClaudeCode.Salvar(_modeloClaudeCode, _esforcoClaudeCode);
         await Personalidade.SalvarAsync(_personalidade);
         _configAberta = false;
 

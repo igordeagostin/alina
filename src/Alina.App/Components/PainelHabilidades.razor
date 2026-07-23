@@ -3,6 +3,7 @@
 
 @using Alina.App.Services
 @using Alina.Core.Ferramentas
+@using Alina.Core.Geracao
 @using Alina.Core.Habilidades
 @using Alina.Core.Orchestration
 @using Microsoft.Extensions.AI
@@ -96,7 +97,8 @@ else
 
         @if (_modo == Modo.Chat)
         {
-            <ChatGeracao Historico="_historico" Gerando="_gerando" Enviar="EnviarAsync" Dica="@DicaChat">
+            <ChatGeracao Historico="_historico" Gerando="_gerando" Progresso="_progresso" Enviar="EnviarAsync"
+                         RotuloRascunho="escrevendo o documento…" Dica="@DicaChat">
                 <Rascunho>
                     @if (_rascunho is not null)
                     {
@@ -134,7 +136,8 @@ else
                 </div>
             </div>
 
-            <ChatGeracao Historico="_historico" Gerando="_gerando" Enviar="EnviarAsync"
+            <ChatGeracao Historico="_historico" Gerando="_gerando" Progresso="_progresso" Enviar="EnviarAsync"
+                         RotuloRascunho="escrevendo o documento…"
                          Placeholder="O que ficou errado ou faltou?"
                          Dica="Rode um teste acima e depois conte o que a Alina deveria ter feito diferente.">
                 <Rascunho>
@@ -203,6 +206,7 @@ else
     private ContextoHabilidade? _contexto;
     private RascunhoHabilidade? _rascunho;
     private bool _gerando;
+    private ProgressoGeracao? _progresso;
 
     private List<FerramentaProposta> _propostas = new();
     private readonly HashSet<string> _recusadas = new(StringComparer.OrdinalIgnoreCase);
@@ -358,6 +362,7 @@ else
         _historico.Clear();
         _rascunho = null;
         _gerando = false;
+        _progresso = null;
         _confirmandoRemocao = null;
         _propostas = new List<FerramentaProposta>();
         _recusadas.Clear();
@@ -381,9 +386,10 @@ else
 
         _historico.Add(new ChatMessage(ChatRole.User, texto));
         _gerando = true;
+        _progresso = null;
         try
         {
-            RespostaGeracao resposta = await Gerador.ContinuarAsync(_historico, _contexto);
+            RespostaGeracao resposta = await Gerador.ContinuarAsync(_historico, _contexto, AcompanharGeracao());
             _historico.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
             _rascunho = resposta.Rascunho;
             _propostas = resposta.Rascunho?.Ferramentas.ToList() ?? new List<FerramentaProposta>();
@@ -396,8 +402,20 @@ else
         finally
         {
             _gerando = false;
+            _progresso = null;
         }
     }
+
+    /// <summary>
+    /// Repinta a conversa a cada pedaço que chega do modelo. O texto vem de outra thread,
+    /// então a atualização volta para o renderizador pelo <c>InvokeAsync</c>.
+    /// </summary>
+    private IProgress<ProgressoGeracao> AcompanharGeracao() => new Progress<ProgressoGeracao>(passo =>
+        _ = InvokeAsync(() =>
+        {
+            _progresso = passo;
+            StateHasChanged();
+        }));
 
     private async Task AoTeclarTesteAsync(KeyboardEventArgs e)
     {

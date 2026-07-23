@@ -1,3 +1,4 @@
+using Alina.Core.Geracao;
 using Microsoft.Extensions.AI;
 
 namespace Alina.Core.Habilidades;
@@ -12,10 +13,13 @@ public interface IGeradorHabilidade
     /// <summary>
     /// Avança um turno da conversa. Sem <paramref name="contexto"/>, a habilidade é
     /// criada do zero; com contexto, a Alina recebe o documento atual e propõe a versão
-    /// revisada.
+    /// revisada. Quando informado, <paramref name="progresso"/> recebe a fala da Alina
+    /// enquanto ela é escrita — o documento inteiro leva dezenas de segundos e a tela
+    /// não deve ficar parada até lá.
     /// </summary>
     Task<RespostaGeracao> ContinuarAsync(
         IReadOnlyList<ChatMessage> historico,
         ContextoHabilidade? contexto = null,
+        IProgress<ProgressoGeracao>? progresso = null,
         CancellationToken cancellationToken = default);
 }

@@ -29,32 +29,65 @@ public sealed class ClienteChatClaudeCodeTests
     }
 
     [Fact]
-    public void Interpretar_devolve_o_texto_da_resposta()
+    public void LeitorFluxo_emite_cada_pedaco_e_devolve_o_texto_inteiro()
     {
-        const string json =
-            "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false," +
-            "\"result\":\"{\\\"mensagem\\\":\\\"pronto\\\"}\",\"num_turns\":1}";
+        List<string> pedacos = [];
+        ClienteChatClaudeCode.LeitorFluxo leitor = new(pedacos.Add);
 
-        Assert.Equal("{\"mensagem\":\"pronto\"}", ClienteChatClaudeCode.Interpretar(json, erro: ""));
+        leitor.Processar(Delta("{\"mensa"));
+        leitor.Processar(Delta("gem\":\"pronto\"}"));
+        leitor.Processar("{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false," +
+                         "\"result\":\"{\\\"mensagem\\\":\\\"pronto\\\"}\",\"num_turns\":1}");
+
+        Assert.Equal(["{\"mensa", "gem\":\"pronto\"}"], pedacos);
+        Assert.Equal("{\"mensagem\":\"pronto\"}", leitor.Concluir(erro: ""));
     }
 
     [Fact]
-    public void Interpretar_sinaliza_erro_do_claude_code()
+    public void LeitorFluxo_cai_no_resultado_final_quando_nao_ha_deltas()
     {
-        const string json =
-            "{\"type\":\"result\",\"subtype\":\"error_max_turns\",\"is_error\":true,\"result\":\"limite atingido\"}";
+        ClienteChatClaudeCode.LeitorFluxo leitor = new();
 
-        string texto = ClienteChatClaudeCode.Interpretar(json, erro: "");
+        leitor.Processar("{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"pronto\"}");
+
+        Assert.Equal("pronto", leitor.Concluir(erro: ""));
+    }
+
+    [Fact]
+    public void LeitorFluxo_sinaliza_erro_do_claude_code()
+    {
+        ClienteChatClaudeCode.LeitorFluxo leitor = new();
+
+        leitor.Processar("{\"type\":\"result\",\"subtype\":\"error_max_turns\",\"is_error\":true," +
+                         "\"result\":\"limite atingido\"}");
+        string texto = leitor.Concluir(erro: "");
 
         Assert.Contains("erro", texto, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("limite atingido", texto);
     }
 
     [Fact]
-    public void Interpretar_usa_o_stderr_quando_nao_ha_saida()
+    public void LeitorFluxo_usa_o_stderr_quando_nao_ha_saida()
     {
-        string texto = ClienteChatClaudeCode.Interpretar(saida: "", erro: "command not found: claude");
+        ClienteChatClaudeCode.LeitorFluxo leitor = new();
 
-        Assert.Contains("command not found: claude", texto);
+        Assert.Contains("command not found: claude", leitor.Concluir(erro: "command not found: claude"));
     }
+
+    [Fact]
+    public void LeitorFluxo_ignora_linhas_que_nao_sao_texto()
+    {
+        List<string> pedacos = [];
+        ClienteChatClaudeCode.LeitorFluxo leitor = new(pedacos.Add);
+
+        leitor.Processar("{\"type\":\"system\",\"subtype\":\"init\"}");
+        leitor.Processar("linha solta que não é json");
+        leitor.Processar("{\"type\":\"stream_event\",\"event\":{\"type\":\"message_stop\"}}");
+
+        Assert.Empty(pedacos);
+    }
+
+    private static string Delta(string texto) =>
+        "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\"," +
+        $"\"delta\":{{\"type\":\"text_delta\",\"text\":{System.Text.Json.JsonSerializer.Serialize(texto)}}}}}}}";
 }

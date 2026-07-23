@@ -1,5 +1,6 @@
 @* Conversa com a Alina sobre um item do catálogo — o mesmo bloco serve para criar, editar e treinar. *@
 
+@using Alina.Core.Geracao
 @using Microsoft.Extensions.AI
 
 <div class="cat-chat">
@@ -14,7 +15,14 @@
         }
         @if (Gerando)
         {
-            <div class="msg msg-bot msg-pending">pensando…</div>
+            @if (TemParcial)
+            {
+                <div class="msg msg-bot">@Progresso!.Mensagem</div>
+            }
+            @if (!TemParcial || Progresso!.Fase == FaseGeracao.Rascunho)
+            {
+                <div class="msg msg-bot msg-pending">@Espera</div>
+            }
         }
     </div>
 
@@ -36,6 +44,8 @@
 @code {
     [Parameter, EditorRequired] public List<ChatMessage> Historico { get; set; } = new();
     [Parameter] public bool Gerando { get; set; }
+    [Parameter] public ProgressoGeracao? Progresso { get; set; }
+    [Parameter] public string RotuloRascunho { get; set; } = "montando o rascunho…";
     [Parameter] public string Dica { get; set; } = string.Empty;
     [Parameter] public string Placeholder { get; set; } = "Digite sua mensagem…";
     [Parameter] public EventCallback<string> Enviar { get; set; }
@@ -43,6 +53,10 @@
     [Parameter] public RenderFragment? Acoes { get; set; }
 
     private string _texto = string.Empty;
+
+    private bool TemParcial => Progresso is not null && Progresso.Mensagem.Length > 0;
+
+    private string Espera => TemParcial ? RotuloRascunho : "pensando…";
 
     /// <summary>
     /// As execuções de treino entram no histórico como mensagens do usuário (é assim

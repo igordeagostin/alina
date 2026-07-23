@@ -1,4 +1,5 @@
 using Alina.Core.Ferramentas;
+using Alina.Core.Geracao;
 using Alina.Core.Habilidades;
 using Alina.Core.Permissoes;
 using Alina.Core.Tools;
@@ -92,6 +93,32 @@ public sealed class GeradorHabilidadeTests
         Assert.Equal("Deploy da API do Diário", resposta.Rascunho!.Titulo);
         Assert.Equal("Publica a API do Diário em produção", resposta.Rascunho.Descricao);
         Assert.Contains("dotnet publish", resposta.Rascunho.Conteudo);
+    }
+
+    [Fact]
+    public async Task ContinuarAsync_reporta_a_fala_antes_de_terminar_o_documento()
+    {
+        string json = """
+            {
+              "mensagem": "Montei a habilidade do Spotify. Quer revisar?",
+              "pronto": true,
+              "titulo": "Controlar o Spotify",
+              "descricao": "Abre, pausa e troca de música",
+              "conteudo": "# Spotify\n1. abrir\n2. pausar"
+            }
+            """;
+        FakeChatClient client = new FakeChatClient((_, _) => new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
+        GeradorHabilidade gerador = new GeradorHabilidade(client);
+        List<ProgressoGeracao> passos = [];
+
+        RespostaGeracao resposta = await gerador.ContinuarAsync(
+            Historico("quero controlar o spotify"),
+            contexto: null,
+            new Progress<ProgressoGeracao>(passos.Add));
+
+        Assert.Contains(passos, p => p.Fase == FaseGeracao.Escrevendo && p.Mensagem.StartsWith("Montei", StringComparison.Ordinal));
+        Assert.Contains(passos, p => p.Fase == FaseGeracao.Rascunho);
+        Assert.Equal("Montei a habilidade do Spotify. Quer revisar?", resposta.Mensagem);
     }
 
     [Fact]

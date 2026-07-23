@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Alina.Core.Ferramentas;
+using Alina.Core.Geracao;
 using Alina.Core.IO;
 using Alina.Core.Permissoes;
 using Alina.Core.Tools;
@@ -104,6 +105,7 @@ public sealed class GeradorHabilidade : IGeradorHabilidade
     public async Task<RespostaGeracao> ContinuarAsync(
         IReadOnlyList<ChatMessage> historico,
         ContextoHabilidade? contexto = null,
+        IProgress<ProgressoGeracao>? progresso = null,
         CancellationToken cancellationToken = default)
     {
         List<ChatMessage> request = new List<ChatMessage>(historico.Count + 3)
@@ -130,8 +132,7 @@ public sealed class GeradorHabilidade : IGeradorHabilidade
 
         request.AddRange(historico);
 
-        ChatResponse response = await _client.GetResponseAsync(request, new ChatOptions(), cancellationToken);
-        string bruto = response.Text?.Trim() ?? string.Empty;
+        string bruto = (await LeituraStream.AcumularAsync(_client, request, progresso, cancellationToken)).Trim();
 
         RascunhoDto? dto = Desserializar(bruto);
         if (dto is null)

@@ -1,3 +1,4 @@
+using Alina.Core.Geracao;
 using Microsoft.Extensions.AI;
 
 namespace Alina.Core.Ferramentas;
@@ -12,9 +13,12 @@ public interface IGeradorFerramenta
     /// <summary>
     /// Avança um turno da conversa. Sem <paramref name="contexto"/>, a ferramenta é criada
     /// do zero; com contexto, a Alina recebe a definição atual e propõe a versão revisada.
+    /// Quando informado, <paramref name="progresso"/> recebe a fala da Alina enquanto ela
+    /// é escrita, para a tela não ficar parada até a definição inteira chegar.
     /// </summary>
     Task<RespostaGeracaoFerramenta> ContinuarAsync(
         IReadOnlyList<ChatMessage> historico,
         ContextoFerramenta? contexto = null,
+        IProgress<ProgressoGeracao>? progresso = null,
         CancellationToken cancellationToken = default);
 }

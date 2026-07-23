@@ -6,19 +6,21 @@ using Alina.Tools.ClaudeCode;
 namespace Alina.App.Services;
 
 /// <summary>
-/// Preferência do modelo do Claude Code ajustável pela tela de configurações. Sobrepõe o
-/// que veio do appsettings, aplicando o valor diretamente no singleton
-/// <see cref="ClaudeCodeOptions"/> — como a tool lê <c>Model</c> a cada delegação, a troca
-/// vale imediatamente, sem reiniciar.
+/// Preferências do Claude Code ajustáveis pela tela de configurações: modelo e esforço de
+/// raciocínio dos papéis de texto. Sobrepõem o que veio do appsettings, aplicando os valores
+/// diretamente no singleton <see cref="ClaudeCodeOptions"/> — como cada execução relê as
+/// opções, a troca vale imediatamente, sem reiniciar.
 ///
-/// O valor (apenas o alias/ID do modelo, nada sensível) é guardado num JSON dentro da pasta
-/// de dados, fora do repositório.
+/// Os valores (alias/ID do modelo e nível de esforço, nada sensível) são guardados num JSON
+/// dentro da pasta de dados, fora do repositório.
 /// </summary>
 public sealed class ConfiguracoesClaudeCodeService
 {
     private sealed class Persistido
     {
         public string? Modelo { get; set; }
+
+        public string? EsforcoTexto { get; set; }
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
@@ -26,6 +28,7 @@ public sealed class ConfiguracoesClaudeCodeService
     private readonly string _arquivo;
     private readonly ClaudeCodeOptions _opcoes;
     private readonly string? _padrao;
+    private readonly string _esforcoPadrao;
     private Persistido _estado = new();
 
     /// <summary>Modelos oferecidos; o primeiro (Id vazio) mantém o padrão da assinatura.</summary>
@@ -37,10 +40,20 @@ public sealed class ConfiguracoesClaudeCodeService
         new("haiku", "Claude Haiku", "mais rápido"),
     ];
 
+    /// <summary>Níveis de esforço oferecidos; o primeiro (Id vazio) deixa o CLI decidir.</summary>
+    public IReadOnlyList<EsforcoClaudeCode> EsforcosDisponiveis { get; } =
+    [
+        new("low", "Baixo", "responde quase de imediato"),
+        new("medium", "Médio", "pensa um pouco antes de escrever"),
+        new("high", "Alto", "raciocina bastante, demora mais"),
+        new("", "Padrão do Claude Code", "deixa o CLI decidir"),
+    ];
+
     public ConfiguracoesClaudeCodeService(StorageOptions armazenamento, ClaudeCodeOptions opcoes)
     {
         _opcoes = opcoes;
         _padrao = string.IsNullOrWhiteSpace(opcoes.Model) ? null : opcoes.Model;
+        _esforcoPadrao = opcoes.EsforcoTexto ?? string.Empty;
         _arquivo = Path.Combine(armazenamento.ResolveDataDirectory(), "claude-code.json");
         Carregar();
         Aplicar();
@@ -49,16 +62,24 @@ public sealed class ConfiguracoesClaudeCodeService
     /// <summary>Modelo atual: o salvo pelo usuário ou, na falta dele, o do appsettings.</summary>
     public string ModeloAtual => _estado.Modelo ?? _padrao ?? string.Empty;
 
+    /// <summary>Esforço atual: o salvo pelo usuário ou, na falta dele, o do appsettings.</summary>
+    public string EsforcoTextoAtual => _estado.EsforcoTexto ?? _esforcoPadrao;
+
     /// <param name="modelo">Alias/ID do modelo; vazio = padrão da assinatura.</param>
-    public void Salvar(string modelo)
+    /// <param name="esforcoTexto">Nível de esforço ("low"/"medium"/"high"); vazio = padrão do CLI.</param>
+    public void Salvar(string modelo, string esforcoTexto)
     {
         _estado.Modelo = string.IsNullOrWhiteSpace(modelo) ? null : modelo.Trim();
+        _estado.EsforcoTexto = esforcoTexto.Trim();
         Aplicar();
         Persistir();
     }
 
-    private void Aplicar() =>
+    private void Aplicar()
+    {
         _opcoes.Model = string.IsNullOrWhiteSpace(_estado.Modelo) ? _padrao : _estado.Modelo;
+        _opcoes.EsforcoTexto = _estado.EsforcoTexto ?? _esforcoPadrao;
+    }
 
     private void Carregar()
     {

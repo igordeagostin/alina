@@ -3,6 +3,7 @@
 
 @using System.Text.Json
 @using Alina.Core.Ferramentas
+@using Alina.Core.Geracao
 @using Microsoft.Extensions.AI
 @inject IFerramentaStore Ferramentas
 @inject IGeradorFerramenta Gerador
@@ -90,7 +91,8 @@ else
 
         @if (_modo == Modo.Chat)
         {
-            <ChatGeracao Historico="_historico" Gerando="_gerando" Enviar="EnviarAsync" Dica="@DicaChat">
+            <ChatGeracao Historico="_historico" Gerando="_gerando" Progresso="_progresso" Enviar="EnviarAsync"
+                         RotuloRascunho="montando a ferramenta…" Dica="@DicaChat">
                 <Rascunho>
                     @if (_rascunho is not null)
                     {
@@ -145,6 +147,7 @@ else
     private ContextoFerramenta? _contexto;
     private RascunhoFerramenta? _rascunho;
     private bool _gerando;
+    private ProgressoGeracao? _progresso;
 
     private bool _ehNova;
     private string _nomeOriginal = string.Empty;
@@ -283,6 +286,7 @@ else
         _historico.Clear();
         _rascunho = null;
         _gerando = false;
+        _progresso = null;
         _confirmandoRemocao = null;
     }
 
@@ -295,9 +299,10 @@ else
 
         _historico.Add(new ChatMessage(ChatRole.User, texto));
         _gerando = true;
+        _progresso = null;
         try
         {
-            RespostaGeracaoFerramenta resposta = await Gerador.ContinuarAsync(_historico, _contexto);
+            RespostaGeracaoFerramenta resposta = await Gerador.ContinuarAsync(_historico, _contexto, AcompanharGeracao());
             _historico.Add(new ChatMessage(ChatRole.Assistant, resposta.Mensagem));
             _rascunho = resposta.Rascunho;
         }
@@ -308,8 +313,20 @@ else
         finally
         {
             _gerando = false;
+            _progresso = null;
         }
     }
+
+    /// <summary>
+    /// Repinta a conversa a cada pedaço que chega do modelo. O texto vem de outra thread,
+    /// então a atualização volta para o renderizador pelo <c>InvokeAsync</c>.
+    /// </summary>
+    private IProgress<ProgressoGeracao> AcompanharGeracao() => new Progress<ProgressoGeracao>(passo =>
+        _ = InvokeAsync(() =>
+        {
+            _progresso = passo;
+            StateHasChanged();
+        }));
 
     private async Task AplicarRascunhoAsync()
     {

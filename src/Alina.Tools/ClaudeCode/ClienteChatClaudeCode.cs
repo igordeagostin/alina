@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using Alina.Core.IO;
 using Microsoft.Extensions.AI;
 
@@ -15,11 +16,21 @@ namespace Alina.Tools.ClaudeCode;
 /// Não serve para conversar e executar: o CLI traz as ferramentas dele e não aceita as
 /// <c>ITool</c> em C# da Alina, então o function-calling do orquestrador não atravessa.
 ///
+/// Como aqui a tarefa é só redigir, o CLI é chamado no modo mais leve que existe: sem
+/// ferramentas, sem MCP, sem skills e com o prompt de sistema trocado por uma linha —
+/// o prompt padrão do Claude Code custa alguns milhares de tokens que não servem a nada
+/// nesta conversa. A resposta vem em streaming, para a UI mostrar o texto chegando em vez
+/// de esperar o documento inteiro.
+///
 /// Cada chamada é um processo novo e sem estado: o histórico é achatado num único prompt e
 /// nada que exija permissão é liberado — a resposta esperada é texto.
 /// </summary>
 public sealed class ClienteChatClaudeCode : IChatClient
 {
+    private const string PromptSistema =
+        "Você redige texto sob encomenda. Siga à risca o formato pedido na mensagem do usuário " +
+        "e responda apenas com ele, sem preâmbulo e sem comentar o formato.";
+
     private readonly ClaudeCodeOptions _opcoes;
     private readonly string? _modelo;
 
@@ -35,7 +46,7 @@ public sealed class ClienteChatClaudeCode : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        string texto = await ExecutarAsync(MontarPrompt(messages), cancellationToken);
+        string texto = await ExecutarAsync(MontarPrompt(messages), aoReceberTexto: null, cancellationToken);
         return new ChatResponse(new ChatMessage(ChatRole.Assistant, texto));
     }
 
@@ -44,8 +55,37 @@ public sealed class ClienteChatClaudeCode : IChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        ChatResponse resposta = await GetResponseAsync(messages, options, cancellationToken);
-        yield return new ChatResponseUpdate(ChatRole.Assistant, resposta.Text);
+        Channel<string> pedacos = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true,
+        });
+
+        string prompt = MontarPrompt(messages);
+        Task<string> execucao = Task.Run(async () =>
+        {
+            try
+            {
+                return await ExecutarAsync(prompt, texto => pedacos.Writer.TryWrite(texto), cancellationToken);
+            }
+            finally
+            {
+                pedacos.Writer.TryComplete();
+            }
+        }, CancellationToken.None);
+
+        bool emitiuAlgo = false;
+        await foreach (string pedaco in pedacos.Reader.ReadAllAsync(cancellationToken))
+        {
+            emitiuAlgo = true;
+            yield return new ChatResponseUpdate(ChatRole.Assistant, pedaco);
+        }
+
+        string final = await execucao;
+        if (!emitiuAlgo && final.Length > 0)
+        {
+            yield return new ChatResponseUpdate(ChatRole.Assistant, final);
+        }
     }
 
     public object? GetService(Type serviceType, object? serviceKey = null) =>
@@ -97,7 +137,10 @@ public sealed class ClienteChatClaudeCode : IChatClient
             .ToString();
     }
 
-    private async Task<string> ExecutarAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<string> ExecutarAsync(
+        string prompt,
+        Action<string>? aoReceberTexto,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -110,11 +153,25 @@ public sealed class ClienteChatClaudeCode : IChatClient
             using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(_opcoes.TimeoutSeconds));
 
-            Task<string> saida = processo.StandardOutput.ReadToEndAsync(timeout.Token);
-            Task<string> erro = processo.StandardError.ReadToEndAsync(timeout.Token);
+            StringBuilder erro = new StringBuilder();
+            Task leituraErro = Task.Run(async () =>
+            {
+                string? linha;
+                while ((linha = await processo.StandardError.ReadLineAsync(CancellationToken.None)) is not null)
+                {
+                    erro.AppendLine(linha);
+                }
+            }, CancellationToken.None);
 
+            LeitorFluxo leitor = new LeitorFluxo(aoReceberTexto);
             try
             {
+                string? linha;
+                while ((linha = await processo.StandardOutput.ReadLineAsync(timeout.Token)) is not null)
+                {
+                    leitor.Processar(linha);
+                }
+
                 await processo.WaitForExitAsync(timeout.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -123,7 +180,8 @@ public sealed class ClienteChatClaudeCode : IChatClient
                 return $"O Claude Code excedeu o tempo limite de {_opcoes.TimeoutSeconds}s e foi encerrado.";
             }
 
-            return Interpretar(await saida, await erro);
+            await leituraErro;
+            return leitor.Concluir(erro.ToString());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -152,7 +210,22 @@ public sealed class ClienteChatClaudeCode : IChatClient
 
         psi.ArgumentList.Add("-p");
         psi.ArgumentList.Add("--output-format");
-        psi.ArgumentList.Add("json");
+        psi.ArgumentList.Add("stream-json");
+        psi.ArgumentList.Add("--include-partial-messages");
+        psi.ArgumentList.Add("--verbose");
+
+        psi.ArgumentList.Add("--system-prompt");
+        psi.ArgumentList.Add(PromptSistema);
+        psi.ArgumentList.Add("--tools");
+        psi.ArgumentList.Add(string.Empty);
+        psi.ArgumentList.Add("--strict-mcp-config");
+        psi.ArgumentList.Add("--disable-slash-commands");
+        psi.ArgumentList.Add("--no-session-persistence");
+        if (!string.IsNullOrWhiteSpace(_opcoes.EsforcoTexto))
+        {
+            psi.ArgumentList.Add("--effort");
+            psi.ArgumentList.Add(_opcoes.EsforcoTexto);
+        }
 
         if (_modelo is not null)
         {
@@ -161,34 +234,6 @@ public sealed class ClienteChatClaudeCode : IChatClient
         }
 
         return psi;
-    }
-
-    internal static string Interpretar(string saida, string erro)
-    {
-        if (saida.Length > 0)
-        {
-            try
-            {
-                ClaudeCodeResult? resultado = JsonSerializer.Deserialize<ClaudeCodeResult>(saida);
-                if (resultado is not null && !resultado.IsError && !string.IsNullOrWhiteSpace(resultado.Result))
-                {
-                    return resultado.Result!;
-                }
-
-                if (!string.IsNullOrWhiteSpace(resultado?.Result))
-                {
-                    return $"O Claude Code retornou um erro: {resultado!.Result}";
-                }
-            }
-            catch (JsonException)
-            {
-                return saida;
-            }
-        }
-
-        return string.IsNullOrWhiteSpace(erro)
-            ? "O Claude Code não retornou resposta."
-            : $"O Claude Code falhou: {erro.Trim()}";
     }
 
     private static void Encerrar(Process processo)
@@ -202,6 +247,114 @@ public sealed class ClienteChatClaudeCode : IChatClient
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
+        }
+    }
+
+    /// <summary>
+    /// Lê as linhas de <c>--output-format stream-json</c>, repassando cada pedaço de texto
+    /// assim que chega e guardando o resultado final. Extraído para permitir teste sem subprocesso.
+    /// </summary>
+    internal sealed class LeitorFluxo
+    {
+        private readonly Action<string>? _aoReceberTexto;
+        private readonly StringBuilder _acumulado = new StringBuilder();
+        private string? _resultado;
+        private bool _erro;
+
+        public LeitorFluxo(Action<string>? aoReceberTexto = null) => _aoReceberTexto = aoReceberTexto;
+
+        public void Processar(string linha)
+        {
+            if (string.IsNullOrWhiteSpace(linha))
+            {
+                return;
+            }
+
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(linha);
+            }
+            catch (JsonException)
+            {
+                return;
+            }
+
+            using (doc)
+            {
+                JsonElement raiz = doc.RootElement;
+                if (raiz.ValueKind != JsonValueKind.Object
+                    || !raiz.TryGetProperty("type", out JsonElement tipo)
+                    || tipo.ValueKind != JsonValueKind.String)
+                {
+                    return;
+                }
+
+                switch (tipo.GetString())
+                {
+                    case "stream_event":
+                        Acumular(TextoDoDelta(raiz));
+                        break;
+
+                    case "result":
+                        _erro = raiz.TryGetProperty("is_error", out JsonElement err)
+                            && err.ValueKind is JsonValueKind.True;
+                        if (raiz.TryGetProperty("result", out JsonElement res)
+                            && res.ValueKind == JsonValueKind.String)
+                        {
+                            _resultado = res.GetString();
+                        }
+                        break;
+                }
+            }
+        }
+
+        public string Concluir(string erro)
+        {
+            string texto = _acumulado.Length > 0 ? _acumulado.ToString() : _resultado ?? string.Empty;
+
+            if (_erro)
+            {
+                return texto.Length > 0
+                    ? $"O Claude Code retornou um erro: {texto}"
+                    : $"O Claude Code falhou: {erro.Trim()}";
+            }
+
+            if (texto.Length > 0)
+            {
+                return texto;
+            }
+
+            return string.IsNullOrWhiteSpace(erro)
+                ? "O Claude Code não retornou resposta."
+                : $"O Claude Code falhou: {erro.Trim()}";
+        }
+
+        private void Acumular(string? texto)
+        {
+            if (string.IsNullOrEmpty(texto))
+            {
+                return;
+            }
+
+            _acumulado.Append(texto);
+            _aoReceberTexto?.Invoke(texto);
+        }
+
+        private static string? TextoDoDelta(JsonElement raiz)
+        {
+            if (!raiz.TryGetProperty("event", out JsonElement evento)
+                || !evento.TryGetProperty("type", out JsonElement tipo)
+                || tipo.ValueKind != JsonValueKind.String
+                || tipo.GetString() != "content_block_delta"
+                || !evento.TryGetProperty("delta", out JsonElement delta)
+                || !delta.TryGetProperty("text", out JsonElement texto)
+                || texto.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            return texto.GetString();
         }
     }
 }
