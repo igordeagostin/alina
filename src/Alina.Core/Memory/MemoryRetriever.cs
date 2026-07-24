@@ -11,6 +11,13 @@ namespace Alina.Core.Memory;
 /// </summary>
 public sealed class MemoryRetriever : IMemoryRetriever
 {
+    /// <summary>
+    /// Teto de espera pelo embedding. A busca semântica roda no caminho crítico de cada
+    /// turno; se o provedor demorar mais que isto, vale mais cair para keyword na hora
+    /// do que segurar a resposta.
+    /// </summary>
+    private static readonly TimeSpan TempoMaximoEmbedding = TimeSpan.FromMilliseconds(800);
+
     private readonly IMemoryStore _store;
     private readonly IEmbeddingGenerator<string, Embedding<float>>? _embeddings;
     private readonly string _embeddingModel;
@@ -113,12 +120,15 @@ public sealed class MemoryRetriever : IMemoryRetriever
 
         try
         {
-            GeneratedEmbeddings<Embedding<float>> embeddings = await _embeddings.GenerateAsync(new[] { text }, cancellationToken: cancellationToken);
+            using CancellationTokenSource limite = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            limite.CancelAfter(TempoMaximoEmbedding);
+
+            GeneratedEmbeddings<Embedding<float>> embeddings = await _embeddings.GenerateAsync(new[] { text }, cancellationToken: limite.Token);
             return embeddings.Count > 0 ? embeddings[0].Vector.ToArray() : null;
         }
         catch
         {
-            // Sem rede / erro do provider: cai para o fallback por keyword.
+            // Sem rede, provider lento ou com erro: cai para o fallback por keyword.
             return null;
         }
     }

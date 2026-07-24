@@ -1,21 +1,22 @@
+using NAudio.Utils;
 using NAudio.Wave;
 
 namespace Alina.Voice;
 
 /// <summary>
 /// Captura de microfone via NAudio (WaveIn). Grava em WAV PCM 16 kHz mono,
-/// formato adequado para o Whisper. Reporta a amplitude de cada bloco para
-/// alimentar a waveform.
+/// formato adequado para o Whisper, direto em memória — sem passar por arquivo
+/// temporário no disco. Reporta a amplitude de cada bloco para alimentar a waveform.
 /// </summary>
 public sealed class NAudioRecorder : IAudioRecorder
 {
     public async Task<byte[]> RecordAsync(Func<CancellationToken, Task> waitForStop, IProgress<float>? nivel = null, CancellationToken cancellationToken = default)
     {
-        string tempPath = Path.Combine(Path.GetTempPath(), $"alina-rec-{Guid.NewGuid():n}.wav");
+        using MemoryStream destino = new MemoryStream();
         TaskCompletionSource stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         using WaveInEvent waveIn = new WaveInEvent { WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 30 };
-        WaveFileWriter writer = new WaveFileWriter(tempPath, waveIn.WaveFormat);
+        WaveFileWriter writer = new WaveFileWriter(new IgnoreDisposeStream(destino), waveIn.WaveFormat);
 
         waveIn.DataAvailable += (_, e) =>
         {
@@ -49,14 +50,7 @@ public sealed class NAudioRecorder : IAudioRecorder
 
         await stopped.Task;
 
-        try
-        {
-            return await File.ReadAllBytesAsync(tempPath, cancellationToken);
-        }
-        finally
-        {
-            TryDelete(tempPath);
-        }
+        return destino.ToArray();
     }
 
     private static float PicoNormalizado(byte[] buffer, int bytes)
@@ -72,20 +66,5 @@ public sealed class NAudioRecorder : IAudioRecorder
         }
 
         return pico / 32768f;
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch
-        {
-            // ignora
-        }
     }
 }

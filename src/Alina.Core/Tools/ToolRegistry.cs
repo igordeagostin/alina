@@ -48,9 +48,17 @@ public sealed class ToolRegistry
     public ToolRegistry SemFerramentas(params string[] nomes) =>
         new(_estaticas, _dinamicas, _status, new HashSet<string>(_ocultas.Concat(nomes), StringComparer.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Cache das <see cref="AIFunction"/> por instância de tool: gerar o schema por
+    /// reflexão a cada turno é desperdício, e tanto as tools estáticas quanto as
+    /// declarativas (cacheadas pelo provider por assinatura da pasta) são reutilizadas
+    /// entre turnos — instância nova só existe quando a ferramenta de fato mudou.
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ITool, AIFunction> FuncoesCacheadas = new();
+
     /// <summary>Todas as tools como <see cref="AITool"/> para o pipeline de function-calling.</summary>
     public IList<AITool> AsAIFunctions() =>
-        Combinar().Select(t => (AITool)Envolver(t.AsAIFunction())).ToList();
+        Combinar().Select(t => (AITool)Envolver(FuncoesCacheadas.GetValue(t, static tool => tool.AsAIFunction()))).ToList();
 
     private IReadOnlyList<ITool> Combinar()
     {

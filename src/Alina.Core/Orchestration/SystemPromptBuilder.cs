@@ -45,6 +45,7 @@ public static class SystemPromptBuilder
         sb.AppendLine("- Quem executa a tarefa não enxerga esta conversa: escreva o pedido dela completo, com caminhos, nomes e tudo que for preciso.");
         sb.AppendLine("- O resultado de cada tarefa chega até você sozinho quando fica pronto. Ao receber um, conte o desfecho em uma ou duas frases, retomando o assunto com naturalidade — sem repetir o pedido inteiro nem narrar o processo.");
         sb.AppendLine("- Respostas rápidas (uma consulta curta, uma pergunta, algo que você já sabe) responda direto, na hora. Paralelizar o que é instantâneo só atrasa.");
+        sb.AppendLine("- Se um turno seu foi interrompido, o que você executou até ali fica registrado na conversa. Ao retomar o assunto, continue do ponto em que parou — não refaça o que o histórico mostra como feito.");
         sb.AppendLine();
 
         if (tools.Count > 0)
@@ -91,30 +92,9 @@ public static class SystemPromptBuilder
             sb.AppendLine(preferences!.Trim());
         }
 
-        if (detailedMemories is { Count: > 0 })
-        {
-            sb.AppendLine();
-            sb.AppendLine("Memórias relevantes para este pedido (fixadas + mais próximas; " +
-                          "cada item tem um id entre colchetes que pode ser usado para esquecê-lo):");
-            foreach (MemoryItem memory in detailedMemories)
-            {
-                sb.AppendLine($"- {FormatDetailed(memory)}");
-            }
-        }
-
-        if (memoryIndex is { Count: > 0 })
-        {
-            sb.AppendLine();
-            sb.AppendLine("Índice do que você já sabe (títulos apenas). Se precisar do conteúdo completo de " +
-                          "algum item que não esteja detalhado acima, chame a ferramenta 'recuperar_memoria' com o id ou uma consulta:");
-            foreach (MemoryIndexEntry entry in memoryIndex)
-            {
-                string kind = entry.Kind == MemoryKind.Procedure ? "procedimento" : "fato";
-                string category = string.IsNullOrWhiteSpace(entry.Category) ? string.Empty : $"/{entry.Category}";
-                sb.AppendLine($"- [{entry.Id}] ({kind}{category}) {entry.Title}");
-            }
-        }
-
+        // Ordem proposital: o que varia pouco (habilidades) antes do que muda a cada
+        // pedido (memórias relevantes) — assim o prefixo do prompt permanece estável
+        // entre turnos e o cache do provedor reduz custo e tempo até o primeiro token.
         if (habilidades is { Count: > 0 })
         {
             sb.AppendLine();
@@ -137,6 +117,30 @@ public static class SystemPromptBuilder
                           "falha foi não haver uma ação chamável (você improvisou no terminal ou não conseguiu executar o " +
                           "passo), proponha junto a ferramenta que faltava. Ofereça uma vez por assunto: recusado, siga em " +
                           "frente sem insistir. Correção que vale só para este pedido não vira mudança no documento.");
+        }
+
+        if (memoryIndex is { Count: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine("Índice do que você já sabe (títulos apenas). Se precisar do conteúdo completo de " +
+                          "algum item que não esteja detalhado abaixo, chame a ferramenta 'recuperar_memoria' com o id ou uma consulta:");
+            foreach (MemoryIndexEntry entry in memoryIndex)
+            {
+                string kind = entry.Kind == MemoryKind.Procedure ? "procedimento" : "fato";
+                string category = string.IsNullOrWhiteSpace(entry.Category) ? string.Empty : $"/{entry.Category}";
+                sb.AppendLine($"- [{entry.Id}] ({kind}{category}) {entry.Title}");
+            }
+        }
+
+        if (detailedMemories is { Count: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine("Memórias relevantes para este pedido (fixadas + mais próximas; " +
+                          "cada item tem um id entre colchetes que pode ser usado para esquecê-lo):");
+            foreach (MemoryItem memory in detailedMemories)
+            {
+                sb.AppendLine($"- {FormatDetailed(memory)}");
+            }
         }
 
         return sb.ToString();

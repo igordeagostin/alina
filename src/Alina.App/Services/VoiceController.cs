@@ -28,8 +28,17 @@ public sealed class VoiceController
 
     private const string FrasePrevia = "Oi, eu sou a Alina. É assim que a minha voz vai soar.";
 
-    /// <summary>Janela curta para juntar falas emendadas num pedido só, em vez de dois turnos.</summary>
-    private static readonly TimeSpan JanelaCoalescencia = TimeSpan.FromMilliseconds(400);
+    /// <summary>
+    /// Janela para juntar falas emendadas num pedido só, em vez de dois turnos. Dinâmica:
+    /// quando a transcrição termina em pontuação conclusiva o pedido quase certamente
+    /// acabou e a espera é mínima; sem pontuação (ou com vírgula), o usuário provavelmente
+    /// está no meio do raciocínio e vale esperar um pouco mais pelo resto.
+    /// </summary>
+    private static readonly TimeSpan JanelaFalaConclusiva = TimeSpan.FromMilliseconds(150);
+    private static readonly TimeSpan JanelaFalaAberta = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>Resultado de tarefa até este tamanho é anunciado direto, sem gastar um turno de LLM.</summary>
+    private const int LimiteAnuncioDireto = 350;
 
     private const string NotaPedidoInterrompido =
         "O usuário mandou você parar antes de a resposta anterior sair; ele não ouviu nada. " +
@@ -91,6 +100,10 @@ public sealed class VoiceController
         _services = services;
         _status = status;
         _log = log;
+
+        // A assinatura é permanente: uma tarefa que termina sem nenhuma sessão aberta
+        // também precisa ser anunciada — antes, o resultado se perdia em silêncio.
+        AssinarTarefas();
     }
 
     /// <summary>Indica se há trabalho em andamento que um pedido explícito pode cancelar.</summary>
@@ -154,7 +167,6 @@ public sealed class VoiceController
             _recorder ??= _services.GetRequiredService<IAudioRecorder>();
             _stt ??= _services.GetRequiredService<ISpeechToText>();
 
-            AssinarTarefas();
             MicrofoneOcupado?.Invoke();
 
             Task escuta = EscutarAsync(opcoes, sessao.Token);
@@ -180,10 +192,13 @@ public sealed class VoiceController
             }
 
             _sessao = null;
-            DesassinarTarefas();
             _status.Set(AssistantState.Idle);
             MicrofoneLivre?.Invoke();
             Concluido?.Invoke();
+
+            // Uma tarefa pode ter terminado no exato instante em que a sessão fechava;
+            // sem isto o resultado ficaria mudo até a próxima conversa.
+            AnunciarSeOciosa();
         }
     }
 
@@ -362,7 +377,8 @@ public sealed class VoiceController
 
             if (_avisos.Reader.TryRead(out BackgroundTask? tarefa))
             {
-                return new Pedido(MontarAvisoDeTarefa(tarefa), DoUsuario: false, ParaRegistrar: string.Empty);
+                await AnunciarTarefaAsync(tarefa, comVoz: true, sessao);
+                continue;
             }
 
             if (!await EsperarMovimentoAsync(sessao))
@@ -409,7 +425,7 @@ public sealed class VoiceController
             }
 
             using CancellationTokenSource espera = CancellationTokenSource.CreateLinkedTokenSource(sessao);
-            espera.CancelAfter(JanelaCoalescencia);
+            espera.CancelAfter(TerminaConclusiva(partes[^1]) ? JanelaFalaConclusiva : JanelaFalaAberta);
 
             try
             {
@@ -442,6 +458,116 @@ public sealed class VoiceController
         catch (OperationCanceledException)
         {
             return false;
+        }
+    }
+
+    /// <summary>A transcrição terminou em pontuação de fim de ideia? Então o pedido quase certamente acabou.</summary>
+    private static bool TerminaConclusiva(string texto) =>
+        texto.Length > 0 && texto[^1] is '.' or '!' or '?';
+
+    /// <summary>
+    /// Anuncia o desfecho de uma tarefa paralela. Resultado curto é dito na hora, sem
+    /// gastar um turno inteiro de LLM só para narrar o que já se sabe — a conversa fica
+    /// registrada via nota para os próximos turnos terem o contexto. Resultado longo
+    /// continua passando pelo modelo, que resume melhor do que um corte cego.
+    /// </summary>
+    private async Task AnunciarTarefaAsync(BackgroundTask tarefa, bool comVoz, CancellationToken sessao)
+    {
+        string resultado = tarefa.Result?.Trim() ?? string.Empty;
+        if (resultado.Length > LimiteAnuncioDireto)
+        {
+            await ResponderAsync(MontarAvisoDeTarefa(tarefa), comVoz, sessao);
+            return;
+        }
+
+        string anuncio = MontarAnuncioCurto(tarefa, resultado);
+        _log.Adicionar("bot", anuncio);
+
+        _orchestrator ??= _services.GetRequiredService<IOrchestrator>();
+        _orchestrator.RegistrarNota(
+            $"A tarefa paralela \"{tarefa.Description}\" terminou e você já anunciou ao usuário: \"{anuncio}\". " +
+            "Não repita o anúncio.");
+
+        if (comVoz && _services.GetRequiredService<VoiceOptions>().Enabled)
+        {
+            await FalarDiretoAsync(anuncio, sessao);
+        }
+    }
+
+    private static string MontarAnuncioCurto(BackgroundTask tarefa, string resultado) => tarefa.Status switch
+    {
+        BackgroundTaskStatus.Completed => $"Sobre \"{tarefa.Description}\": {resultado}",
+        BackgroundTaskStatus.Failed => $"A tarefa \"{tarefa.Description}\" falhou: {resultado}",
+        _ => $"A tarefa \"{tarefa.Description}\" foi cancelada.",
+    };
+
+    /// <summary>Fala um texto já pronto pelo mesmo pipeline da resposta, com barge-in e eco tratados.</summary>
+    private async Task FalarDiretoAsync(string texto, CancellationToken sessao)
+    {
+        using CancellationTokenSource fala = CancellationTokenSource.CreateLinkedTokenSource(sessao);
+        _fala = fala;
+        _falaEmCurso = texto;
+
+        Channel<string> blocos = Channel.CreateUnbounded<string>();
+        foreach (string bloco in DivisorFala.Dividir(texto))
+        {
+            blocos.Writer.TryWrite(bloco);
+        }
+
+        blocos.Writer.TryComplete();
+
+        try
+        {
+            await ReproduzirFalaAsync(blocos.Reader, new StringBuilder(), fala.Token);
+        }
+        finally
+        {
+            _fala = null;
+            MarcarOcioso();
+        }
+    }
+
+    /// <summary>
+    /// Se não há sessão de voz nem atendimento de texto abertos, anuncia sozinha as
+    /// tarefas que terminaram — o resultado não espera o usuário voltar a falar.
+    /// </summary>
+    private void AnunciarSeOciosa()
+    {
+        lock (_porta)
+        {
+            if (_emConversaVoz || _atendendoTexto || _avisos.Reader.Count == 0)
+            {
+                return;
+            }
+
+            _atendendoTexto = true;
+        }
+
+        _ = AnunciarPendentesAsync();
+    }
+
+    private async Task AnunciarPendentesAsync()
+    {
+        try
+        {
+            bool comVoz = _services.GetRequiredService<VoiceOptions>().Enabled;
+            while (_avisos.Reader.TryRead(out BackgroundTask? tarefa))
+            {
+                await AnunciarTarefaAsync(tarefa, comVoz, CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Adicionar("error", $"[erro ao anunciar tarefa] {ex.Message}");
+        }
+        finally
+        {
+            lock (_porta)
+            {
+                _atendendoTexto = false;
+            }
+
+            _status.Set(AssistantState.Idle);
         }
     }
 
@@ -542,22 +668,29 @@ public sealed class VoiceController
     /// </summary>
     private async Task ResponderPorEscritoAsync(string texto)
     {
-        AssinarTarefas();
-
         try
         {
             string? proximo = texto;
 
-            while (proximo is not null)
+            while (true)
             {
-                await ResponderAsync(proximo, comVoz: false, CancellationToken.None);
+                if (proximo is not null)
+                {
+                    await ResponderAsync(proximo, comVoz: false, CancellationToken.None);
+                }
+
+                while (_avisos.Reader.TryRead(out BackgroundTask? tarefa))
+                {
+                    await AnunciarTarefaAsync(tarefa, comVoz: false, CancellationToken.None);
+                }
 
                 lock (_porta)
                 {
-                    proximo = ProximoPedidoJaPronto();
-                    if (proximo is null)
+                    proximo = ProximaFalaJaPronta();
+                    if (proximo is null && _avisos.Reader.Count == 0)
                     {
                         _atendendoTexto = false;
+                        break;
                     }
                 }
             }
@@ -569,12 +702,11 @@ public sealed class VoiceController
                 _atendendoTexto = false;
             }
 
-            DesassinarTarefas();
             _status.Set(AssistantState.Idle);
         }
     }
 
-    private string? ProximoPedidoJaPronto()
+    private string? ProximaFalaJaPronta()
     {
         while (_falas.Reader.TryRead(out Task<Fala>? pendente))
         {
@@ -590,7 +722,7 @@ public sealed class VoiceController
             }
         }
 
-        return _avisos.Reader.TryRead(out BackgroundTask? tarefa) ? MontarAvisoDeTarefa(tarefa) : null;
+        return null;
     }
 
     /// <summary>
@@ -851,16 +983,11 @@ public sealed class VoiceController
         }
     }
 
-    private void DesassinarTarefas()
+    private void AoTerminarTarefa(object? remetente, BackgroundTask tarefa)
     {
-        if (_tarefas is not null)
-        {
-            _tarefas.TaskFinished -= AoTerminarTarefa;
-        }
-    }
-
-    private void AoTerminarTarefa(object? remetente, BackgroundTask tarefa) =>
         _avisos.Writer.TryWrite(tarefa);
+        AnunciarSeOciosa();
+    }
 
     private static void Descartar(Task<byte[]>? sintese) =>
         sintese?.ContinueWith(

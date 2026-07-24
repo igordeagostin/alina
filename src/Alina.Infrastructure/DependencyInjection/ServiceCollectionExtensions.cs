@@ -98,6 +98,11 @@ public static class ServiceCollectionExtensions
         // Orquestrador
         services.AddSingleton<IOrchestrator, ChatOrchestrator>();
 
+        // Acesso tardio à conversa principal para as tools que herdam contexto (ex.:
+        // tarefas paralelas). Uma Func evita o ciclo tools → orquestrador → tools:
+        // a resolução só acontece na primeira execução, com o grafo já montado.
+        services.AddSingleton<Func<IOrchestrator?>>(sp => () => sp.GetService<IOrchestrator>());
+
         // Orquestradores isolados para as tarefas paralelas: mesmas ferramentas (menos as
         // que abrem novas tarefas) e memória de trabalho descartável. A resolução tardia
         // do ToolRegistry é proposital — as tools que disparam paralelismo dependem desta

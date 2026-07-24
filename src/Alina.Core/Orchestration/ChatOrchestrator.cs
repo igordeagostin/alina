@@ -21,6 +21,17 @@ public sealed class ChatOrchestrator : IOrchestrator
     /// <summary>Quantas memórias mais relevantes injetar (além das fixadas) por turno.</summary>
     private const int TopKMemories = 5;
 
+    /// <summary>
+    /// Tamanho estimado (em caracteres) a partir do qual o histórico começa a ser
+    /// compactado. Mantém a latência e o custo de cada turno estáveis mesmo em
+    /// conversas de horas — sem compactação, o tempo até a primeira palavra cresceria
+    /// junto com a conversa até estourar o contexto do modelo.
+    /// </summary>
+    private const int LimiteCaracteresHistorico = 80_000;
+
+    /// <summary>Mensagens mais recentes que nunca entram no resumo (janela viva).</summary>
+    private const int MensagensPreservadas = 24;
+
     private readonly IChatClient _client;
     private readonly ToolRegistry _tools;
     private readonly IConversationStore _store;
@@ -35,6 +46,10 @@ public sealed class ChatOrchestrator : IOrchestrator
     private Conversation _current = new();
     private string? _preferences;
     private bool _preferencesLoaded;
+
+    private Task<string>? _resumoEmPreparo;
+    private Conversation? _conversaDoResumo;
+    private int _mensagensNoResumo;
 
     public ChatOrchestrator(
         IChatClient client,
@@ -81,6 +96,8 @@ public sealed class ChatOrchestrator : IOrchestrator
 
     public async Task<string> SendAsync(string userText, IProgress<string>? progressoResposta, CancellationToken cancellationToken = default)
     {
+        AplicarResumoProntoSeHouver();
+
         _current.Messages.Add(new ChatMessage(ChatRole.User, userText));
 
         if (_current.Title == "Nova conversa" && !string.IsNullOrWhiteSpace(userText))
@@ -111,24 +128,88 @@ public sealed class ChatOrchestrator : IOrchestrator
         List<ChatResponseUpdate> updates = new List<ChatResponseUpdate>();
         StringBuilder texto = new StringBuilder();
 
-        await foreach (ChatResponseUpdate update in _client.GetStreamingResponseAsync(request, options, cancellationToken))
+        try
         {
-            updates.Add(update);
-
-            string pedaco = update.Text;
-            if (pedaco.Length > 0)
+            await foreach (ChatResponseUpdate update in _client.GetStreamingResponseAsync(request, options, cancellationToken))
             {
-                texto.Append(pedaco);
-                progressoResposta?.Report(pedaco);
+                updates.Add(update);
+
+                string pedaco = update.Text;
+                if (pedaco.Length > 0)
+                {
+                    texto.Append(pedaco);
+                    progressoResposta?.Report(pedaco);
+                }
             }
+        }
+        catch when (updates.Count > 0)
+        {
+            // Interrompida (ou o provedor caiu) no meio do turno: o que já foi feito —
+            // texto parcial e ferramentas executadas — fica na conversa. É o que permite
+            // retomar do ponto exato em vez de repetir trabalho como se nada tivesse havido.
+            await PreservarTurnoParcialAsync(updates);
+            throw;
         }
 
         _current.Messages.AddMessages(updates);
         _current.UpdatedAt = DateTimeOffset.Now;
 
         await _store.SaveAsync(_current, cancellationToken);
+        AgendarCompactacaoSeNecessario();
 
         return texto.ToString();
+    }
+
+    private async Task PreservarTurnoParcialAsync(List<ChatResponseUpdate> updates)
+    {
+        int antes = _current.Messages.Count;
+        _current.Messages.AddMessages(updates);
+        CompletarChamadasSemResultado(antes);
+        _current.Messages.Add(new ChatMessage(
+            ChatRole.User,
+            "[nota do sistema] O turno acima foi interrompido no meio. O que está registrado até aqui " +
+            "FOI executado de verdade — ao retomar o assunto, continue do ponto em que parou, sem refazer."));
+        _current.UpdatedAt = DateTimeOffset.Now;
+
+        try
+        {
+            await _store.SaveAsync(_current, CancellationToken.None);
+        }
+        catch
+        {
+            // A persistência não pode mascarar a causa original da interrupção.
+        }
+    }
+
+    /// <summary>
+    /// Fecha as chamadas de ferramenta que ficaram sem resultado (o turno foi cancelado
+    /// entre a chamada e a resposta): provedores rejeitam histórico com tool call órfã.
+    /// </summary>
+    private void CompletarChamadasSemResultado(int desde)
+    {
+        List<string> pendentes = new List<string>();
+
+        for (int i = desde; i < _current.Messages.Count; i++)
+        {
+            foreach (AIContent conteudo in _current.Messages[i].Contents)
+            {
+                if (conteudo is FunctionCallContent chamada)
+                {
+                    pendentes.Add(chamada.CallId);
+                }
+                else if (conteudo is FunctionResultContent resultado)
+                {
+                    pendentes.Remove(resultado.CallId);
+                }
+            }
+        }
+
+        foreach (string callId in pendentes)
+        {
+            _current.Messages.Add(new ChatMessage(
+                ChatRole.Tool,
+                [new FunctionResultContent(callId, "(interrompida antes de terminar — resultado desconhecido)")]));
+        }
     }
 
     public void RegistrarNota(string nota)
@@ -214,4 +295,111 @@ public sealed class ChatOrchestrator : IOrchestrator
 
     private async Task<PerfilPersonalidade?> ObterPerfilAsync(CancellationToken cancellationToken)
         => await _personalidade!.ObterAsync(cancellationToken);
+
+    /// <summary>
+    /// Compactação em duas etapas para nunca custar latência a um turno: o resumo do
+    /// trecho antigo é gerado em segundo plano sobre uma cópia e, quando fica pronto,
+    /// o turno seguinte o aplica numa troca instantânea (<see cref="AplicarResumoProntoSeHouver"/>).
+    /// </summary>
+    private void AgendarCompactacaoSeNecessario()
+    {
+        if (_resumoEmPreparo is not null || EstimarTamanho(_current.Messages) <= LimiteCaracteresHistorico)
+        {
+            return;
+        }
+
+        int corte = EncontrarCorteDeTurno();
+        if (corte <= 1)
+        {
+            return;
+        }
+
+        List<ChatMessage> trecho = new List<ChatMessage>(_current.Messages.Take(corte));
+        _conversaDoResumo = _current;
+        _mensagensNoResumo = corte;
+        _resumoEmPreparo = Task.Run(() => ResumirTrechoAsync(trecho));
+    }
+
+    private void AplicarResumoProntoSeHouver()
+    {
+        if (_resumoEmPreparo is null || !_resumoEmPreparo.IsCompleted)
+        {
+            return;
+        }
+
+        Task<string> pronto = _resumoEmPreparo;
+        _resumoEmPreparo = null;
+
+        if (!pronto.IsCompletedSuccessfully
+            || string.IsNullOrWhiteSpace(pronto.Result)
+            || !ReferenceEquals(_conversaDoResumo, _current)
+            || _current.Messages.Count < _mensagensNoResumo)
+        {
+            return;
+        }
+
+        List<ChatMessage> compactadas = new List<ChatMessage>(_current.Messages.Count - _mensagensNoResumo + 1)
+        {
+            new(ChatRole.User,
+                "[resumo da conversa até aqui — os detalhes completos foram compactados] " + pronto.Result.Trim()),
+        };
+        compactadas.AddRange(_current.Messages.Skip(_mensagensNoResumo));
+
+        _logger.LogDebug(
+            "Histórico compactado: {Antes} mensagens viraram {Depois}.", _current.Messages.Count, compactadas.Count);
+
+        _current.Messages = compactadas;
+    }
+
+    /// <summary>
+    /// Índice do início da janela viva, recuado até uma fronteira de turno (mensagem do
+    /// usuário) para o resumo nunca separar uma chamada de ferramenta do seu resultado.
+    /// </summary>
+    private int EncontrarCorteDeTurno()
+    {
+        int corte = _current.Messages.Count - MensagensPreservadas;
+
+        while (corte > 1 && _current.Messages[corte].Role != ChatRole.User)
+        {
+            corte--;
+        }
+
+        return corte;
+    }
+
+    private async Task<string> ResumirTrechoAsync(List<ChatMessage> trecho)
+    {
+        List<ChatMessage> request = new List<ChatMessage>(trecho.Count + 1)
+        {
+            new(ChatRole.System,
+                "Resuma a conversa a seguir em português do Brasil, de forma densa e fiel, preservando: " +
+                "fatos, decisões, caminhos de arquivos, nomes, comandos executados e seus resultados, " +
+                "pendências e o assunto em andamento. O resumo substituirá essas mensagens na memória de " +
+                "trabalho da assistente, então nada essencial pode se perder. Escreva apenas o resumo."),
+        };
+        request.AddRange(trecho);
+
+        ChatResponse response = await _client.GetResponseAsync(request, new ChatOptions(), CancellationToken.None);
+        return response.Text.Trim();
+    }
+
+    private static int EstimarTamanho(List<ChatMessage> mensagens)
+    {
+        int total = 0;
+        foreach (ChatMessage mensagem in mensagens)
+        {
+            foreach (AIContent conteudo in mensagem.Contents)
+            {
+                total += conteudo switch
+                {
+                    TextContent texto => texto.Text.Length,
+                    FunctionResultContent resultado => resultado.Result?.ToString()?.Length ?? 0,
+                    FunctionCallContent chamada => chamada.Name.Length + 64,
+                    _ => 32,
+                };
+            }
+        }
+
+        return total;
+    }
 }
